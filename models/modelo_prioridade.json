@@ -1,0 +1,71 @@
+{
+  "treinado_em": "2026-09-23T23:54:49",
+  "sklearn": "1.9.1",
+  "dataset": "lotes.csv",
+  "sha256_dataset": "e0b669201d97463214074ca88a6179c2abb09fe5c61fabdc163ddd45de0da95b",
+  "split": {
+    "inicio_validacao": "2026-03-01",
+    "inicio_teste": "2026-06-01"
+  },
+  "versao": "prioridade-v1",
+  "features": [
+    "categoria",
+    "armazenamento",
+    "tipo_doador",
+    "horas_restantes",
+    "peso_kg",
+    "rota_expressa"
+  ],
+  "metricas_teste": {
+    "modelo": "random_forest",
+    "acuracia": 0.9233,
+    "f1_macro": 0.9238,
+    "recall_critica": 0.95,
+    "regra_no_teste": {
+      "acuracia": 0.9253,
+      "f1_macro": 0.9258,
+      "recall_critica": 0.9518
+    },
+    "ingenuo_no_teste": {
+      "acuracia": 0.3031,
+      "f1_macro": 0.1163,
+      "recall_critica": 0.0
+    },
+    "matriz_confusao": {
+      "ordem": [
+        "CRITICA",
+        "ALTA",
+        "MEDIA",
+        "BAIXA"
+      ],
+      "valores": [
+        [
+          1519,
+          80,
+          0,
+          0
+        ],
+        [
+          65,
+          1722,
+          91,
+          0
+        ],
+        [
+          0,
+          86,
+          1613,
+          77
+        ],
+        [
+          0,
+          0,
+          76,
+          867
+        ]
+      ]
+    }
+  },
+  "artefato": "modelo_prioridade.joblib",
+  "sha256_artefato": "c9a5f402a5953217acdfdad0510b551730bc08f1667d039e83b1a350d01e6bbf"
+}

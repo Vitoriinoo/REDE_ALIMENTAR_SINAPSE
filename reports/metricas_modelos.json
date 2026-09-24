@@ -1,0 +1,203 @@
+{
+  "modelo_1_prioridade": {
+    "baselines": {
+      "ingenuo_validacao": {
+        "acuracia": 0.2977,
+        "f1_macro": 0.1147,
+        "recall_critica": 0.0
+      },
+      "regra_validacao": {
+        "acuracia": 0.9287,
+        "f1_macro": 0.9281,
+        "recall_critica": 0.9517
+      }
+    },
+    "validacao": {
+      "regressao_logistica": {
+        "acuracia": 0.6495,
+        "f1_macro": 0.6364,
+        "recall_critica": 0.729
+      },
+      "random_forest": {
+        "acuracia": 0.9273,
+        "f1_macro": 0.9264,
+        "recall_critica": 0.9499
+      },
+      "hist_gradient_boosting": {
+        "acuracia": 0.9185,
+        "f1_macro": 0.9179,
+        "recall_critica": 0.9425
+      }
+    },
+    "teste": {
+      "modelo": "random_forest",
+      "acuracia": 0.9233,
+      "f1_macro": 0.9238,
+      "recall_critica": 0.95,
+      "regra_no_teste": {
+        "acuracia": 0.9253,
+        "f1_macro": 0.9258,
+        "recall_critica": 0.9518
+      },
+      "ingenuo_no_teste": {
+        "acuracia": 0.3031,
+        "f1_macro": 0.1163,
+        "recall_critica": 0.0
+      },
+      "matriz_confusao": {
+        "ordem": [
+          "CRITICA",
+          "ALTA",
+          "MEDIA",
+          "BAIXA"
+        ],
+        "valores": [
+          [
+            1519,
+            80,
+            0,
+            0
+          ],
+          [
+            65,
+            1722,
+            91,
+            0
+          ],
+          [
+            0,
+            86,
+            1613,
+            77
+          ],
+          [
+            0,
+            0,
+            76,
+            867
+          ]
+        ]
+      }
+    }
+  },
+  "modelo_2_descarte": {
+    "baselines": {
+      "ingenuo_validacao": {
+        "acuracia": 0.8847,
+        "precisao": 0.0,
+        "recall": 0.0,
+        "f1": 0.0,
+        "roc_auc": null,
+        "pr_auc": 0.1153
+      },
+      "heuristica_v0_validacao": {
+        "acuracia": 0.8546,
+        "precisao": 0.4031,
+        "recall": 0.5435,
+        "f1": 0.4629,
+        "roc_auc": 0.7193,
+        "pr_auc": 0.2718
+      }
+    },
+    "validacao": {
+      "regressao_logistica": {
+        "limiar": 0.3387,
+        "acuracia": 0.6012,
+        "precisao": 0.2046,
+        "recall": 0.8511,
+        "f1": 0.3299,
+        "roc_auc": 0.8162,
+        "pr_auc": 0.4009
+      },
+      "random_forest": {
+        "limiar": 0.197,
+        "acuracia": 0.6414,
+        "precisao": 0.2233,
+        "recall": 0.8511,
+        "f1": 0.3538,
+        "roc_auc": 0.8317,
+        "pr_auc": 0.4784
+      },
+      "hist_gradient_boosting": {
+        "limiar": 0.2732,
+        "acuracia": 0.6195,
+        "precisao": 0.2127,
+        "recall": 0.8511,
+        "f1": 0.3404,
+        "roc_auc": 0.8315,
+        "pr_auc": 0.4794
+      }
+    },
+    "teste": {
+      "modelo": "hist_gradient_boosting",
+      "limiar": 0.2732,
+      "acuracia": 0.616,
+      "precisao": 0.1974,
+      "recall": 0.8567,
+      "f1": 0.3209,
+      "roc_auc": 0.8267,
+      "pr_auc": 0.4411,
+      "heuristica_v0_no_teste": {
+        "acuracia": 0.8556,
+        "precisao": 0.373,
+        "recall": 0.5351,
+        "f1": 0.4396,
+        "roc_auc": 0.7143,
+        "pr_auc": 0.2488
+      },
+      "ingenuo_no_teste": {
+        "acuracia": 0.8941,
+        "precisao": 0.0,
+        "recall": 0.0,
+        "f1": 0.0,
+        "roc_auc": null,
+        "pr_auc": 0.1059
+      },
+      "taxa_descarte_teste": 0.1059,
+      "matriz_confusao": {
+        "ordem": [
+          "salvo",
+          "descartado"
+        ],
+        "valores": [
+          [
+            3255,
+            2285
+          ],
+          [
+            94,
+            562
+          ]
+        ]
+      }
+    },
+    "importancia_permutacao": {
+      "horas_restantes": 0.2194,
+      "dist_ong_top_km": 0.1086,
+      "doador_tem_refrigeracao": 0.0985,
+      "peso_kg": 0.0263,
+      "n_ongs_compativeis_10km": 0.0206,
+      "armazenamento": 0.012,
+      "n_transportadores_ativos_raio": 0.0096,
+      "hora": 0.0056,
+      "categoria": 0.0055,
+      "regiao": 0.0035,
+      "segmento": 0.002,
+      "prioridade": 0.0011,
+      "tipo_doador": 0.0002,
+      "rota_expressa": 0.0,
+      "fim_de_semana": 0.0,
+      "feriado": -0.0,
+      "refrigerado_disponivel": -0.0003,
+      "dia_semana": -0.0015
+    }
+  },
+  "treinado_em": "2026-09-23T23:54:49",
+  "sklearn": "1.9.1",
+  "dataset": "lotes.csv",
+  "sha256_dataset": "e0b669201d97463214074ca88a6179c2abb09fe5c61fabdc163ddd45de0da95b",
+  "split": {
+    "inicio_validacao": "2026-03-01",
+    "inicio_teste": "2026-06-01"
+  }
+}

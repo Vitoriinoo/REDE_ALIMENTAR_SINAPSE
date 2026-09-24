@@ -1,0 +1,77 @@
+{
+  "treinado_em": "2026-09-23T23:54:49",
+  "sklearn": "1.9.1",
+  "dataset": "lotes.csv",
+  "sha256_dataset": "e0b669201d97463214074ca88a6179c2abb09fe5c61fabdc163ddd45de0da95b",
+  "split": {
+    "inicio_validacao": "2026-03-01",
+    "inicio_teste": "2026-06-01"
+  },
+  "versao": "descarte-v1",
+  "features": [
+    "categoria",
+    "armazenamento",
+    "tipo_doador",
+    "segmento",
+    "regiao",
+    "prioridade",
+    "horas_restantes",
+    "peso_kg",
+    "hora",
+    "dia_semana",
+    "n_ongs_compativeis_10km",
+    "dist_ong_top_km",
+    "n_transportadores_ativos_raio",
+    "rota_expressa",
+    "doador_tem_refrigeracao",
+    "fim_de_semana",
+    "feriado",
+    "refrigerado_disponivel"
+  ],
+  "limiar": 0.2732,
+  "metricas_teste": {
+    "modelo": "hist_gradient_boosting",
+    "limiar": 0.2732,
+    "acuracia": 0.616,
+    "precisao": 0.1974,
+    "recall": 0.8567,
+    "f1": 0.3209,
+    "roc_auc": 0.8267,
+    "pr_auc": 0.4411,
+    "heuristica_v0_no_teste": {
+      "acuracia": 0.8556,
+      "precisao": 0.373,
+      "recall": 0.5351,
+      "f1": 0.4396,
+      "roc_auc": 0.7143,
+      "pr_auc": 0.2488
+    },
+    "ingenuo_no_teste": {
+      "acuracia": 0.8941,
+      "precisao": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "roc_auc": null,
+      "pr_auc": 0.1059
+    },
+    "taxa_descarte_teste": 0.1059,
+    "matriz_confusao": {
+      "ordem": [
+        "salvo",
+        "descartado"
+      ],
+      "valores": [
+        [
+          3255,
+          2285
+        ],
+        [
+          94,
+          562
+        ]
+      ]
+    }
+  },
+  "artefato": "modelo_descarte.joblib",
+  "sha256_artefato": "39142f87ca1808a48a51547631c36daf507e27a4bb95ff6d18d6633cb345a04c"
+}
