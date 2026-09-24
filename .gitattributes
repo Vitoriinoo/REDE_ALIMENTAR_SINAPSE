@@ -1,0 +1,8 @@
+# Dados e artefatos: preservar os bytes exatos para que o SHA-256 registrado nos
+# metadados dos modelos confira em qualquer sistema operacional (STRIDE T2/T3).
+data/** -text
+models/** -text
+reports/*.csv -text
+*.xlsx binary
+*.gz binary
+*.joblib binary

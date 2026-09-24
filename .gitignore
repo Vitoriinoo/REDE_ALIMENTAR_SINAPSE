@@ -1,0 +1,26 @@
+# Ambiente virtual
+.venv/
+
+# Python
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+
+# Segredos: nunca versionar
+.env
+*.pem
+*.key
+
+# Artefatos gerados (modelos treinados e dados brutos grandes)
+models/*.joblib
+data/raw/
+
+# SO / editores
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Logs locais de execução
+reports/_*.log
+.pytest_cache/
