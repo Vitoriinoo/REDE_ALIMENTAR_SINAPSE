@@ -1,7 +1,24 @@
 # Rede Alimenta IA: Regras de Negócio
 
-> **Status:** v1.1, regras validadas pelo grupo em 2026-09-23 (v1.1: orientação de refrigeração, turno noturno, inspeção na entrega e rodadas).
-> Este documento é a **fonte de verdade** do gerador de dados (`src/data`), dos modelos (`src/models`) e da Matriz STRIDE (`docs/stride`).
+> **Status:** v2.0, decisões do grupo em 2026-10-05 sobre a v1.1 (2026-09-23).
+> Este documento é a **fonte de verdade** do gerador de dados (`src/data`), dos modelos (`src/models`), da validação (`src/validacao`), da observabilidade (`src/observabilidade`) e da Matriz STRIDE (`docs/stride`).
+> Requisitos de produto: [PRD](prd.md). Arquitetura: [SDD](sdd.md). Governança: [docs/governanca](governanca/).
+
+### O que mudou na v2.0
+
+| Tema | v1.1 | v2.0 | Seção |
+|---|---|---|---|
+| Pessoa física (CPF) | Doava Não perecível e Hortifruti | Doa **só Não perecível lacrado** na embalagem original | 4.1 |
+| Questionário do lote | — | Perguntas obrigatórias que viram uma **Declaração de Doação** assinada e imutável | 4.5 |
+| Validação de entrada | Só o texto livre passava por guardrail | **Tudo** que entra é validado antes de ser considerado (lista fechada, faixas, dígito verificador) | 4.6 |
+| Verificação do CNPJ | Simulada | **Dígito verificador** (inclusive alfanumérico) + consulta à Receita (BrasilAPI) | 6.3 |
+| Capacidades da ONG | Refrigeração | Cozinha, refrigeração, freezer, distribui cestas, veículo próprio, **janela de recebimento**, categorias aceitas | 6.4 |
+| Ranking | Distância | **Tempo até a ONG poder receber**, complementaridade busca × entrega, bônus de pedido aberto | 6.1 |
+| Pedidos da ONG | — | A ONG **pede alimentos** (mural + bônus no ranking) | 6.5 |
+| Logs | Formato de exemplo | **Completo em cobertura, mínimo em conteúdo**, encadeado por HMAC, retenção 90 dias / 5 anos | 10.1 |
+| Observabilidade | — | Alerta quando algo **sai do normal**, não só quando bate o teto | 10.2 |
+| Controle da IA | Implícito | Desligamento por modelo, piso de segurança, inventário de agência | 10.3 |
+| Feedback humano | — | Ciclo de **4 passos** (RLHF adaptado a classificadores) | 10.4 |
 
 ---
 
@@ -21,6 +38,9 @@ A IA **recomenda**. As pessoas **decidem** as ações de impacto. Toda regra cr�
 | Minimização de dados (LGPD) | Os modelos nunca recebem CPF, nome ou endereço exato |
 | Segregação de funções | Quem pede dinheiro do caixa nunca é quem aprova |
 | Rastreabilidade | Toda decisão gera log auditável (seção 10) |
+| Entrada não confiável | Tudo que entra (formulário, texto, resposta de API externa) é validado antes de ser considerado (4.6) |
+| Observabilidade | O sistema compara o comportamento com o normal e avisa no desvio, antes do teto (10.2) |
+| IA desligável | Cada modelo pode ser desligado sem parar o sistema: a regra no código assume (10.3) |
 
 ---
 
@@ -70,9 +90,9 @@ A IA **recomenda**. As pessoas **decidem** as ações de impacto. Toda regra cr�
 
 | Perfil | Quem é | Pode | Não pode |
 |---|---|---|---|
-| **Doador PJ** | Restaurante, mercado, padaria, hortifruti, indústria (CNPJ) | Cadastrar lotes de **qualquer categoria**, acompanhar status | Ver dados de outras doações, escolher a ONG |
-| **Doador PF** | Pessoa física (CPF) | Cadastrar lotes **só de Não perecível e Hortifruti** | Doar Preparado, Refrigerado, Congelado ou Padaria |
-| **ONG** | Associação/fundação com CNPJ **aprovada por admin** | Aceitar/recusar lotes, confirmar recebimento, **solicitar** uso do caixa | Aprovar gasto do caixa, ver dados de outras ONGs |
+| **Doador PJ** | Restaurante, mercado, padaria, hortifruti, indústria (CNPJ) | Cadastrar lotes de **qualquer categoria**, acompanhar status, ver o mural de pedidos | Ver dados de outras doações, escolher a ONG |
+| **Doador PF** | Pessoa física (CPF) | Cadastrar lotes **só de Não perecível lacrado** | Doar qualquer outra categoria |
+| **ONG** | Associação/fundação com CNPJ **aprovada por admin** | Aceitar/recusar lotes, confirmar recebimento, **pedir alimentos** (6.5), declarar o que aceita (6.4), **solicitar** uso do caixa | Aprovar gasto do caixa, ver dados de outras ONGs |
 | **Transportador** | Voluntário, motorista de retorno, transportadora parceira | Aceitar/recusar coletas, confirmar coleta e entrega | Ver o endereço exato antes de aceitar |
 | **Gestor do caixa** | Pessoa **externa às ONGs** (plataforma ou parceiro) | Aprovar/recusar gastos acima do teto | Ser vinculado a uma ONG, cadastrar lotes |
 | **Admin** | Equipe da plataforma | Aprovar ONGs, cadastrar hubs, tratar escaladas | Aprovar gastos do caixa (segregação de funções) |
@@ -90,12 +110,12 @@ A IA **recomenda**. As pessoas **decidem** as ações de impacto. Toda regra cr�
 | Preparado | Marmitas, refeições prontas | ✅ | ❌ | ✅ |
 | Refrigerado | Laticínios, frios | ✅ | ❌ | ✅ |
 | Congelado | Carnes, congelados | ✅ | ❌ | ✅ |
-| Hortifruti | Frutas, verduras, legumes | ✅ | ✅ | ❌ |
+| Hortifruti | Frutas, verduras, legumes | ✅ | ❌ | ❌ |
 | Padaria | Pães, bolos | ✅ | ❌ | ❌ |
-| Não perecível | Grãos, enlatados, industrializados lacrados | ✅ | ✅ | ❌ |
+| Não perecível | Grãos, enlatados, industrializados lacrados | ✅ | ✅ **só lacrado** | ❌ |
 
 > Base legal: a **Lei 14.016/2020** regula a doação de excedentes por estabelecimentos. Alimento preparado só vem de PJ, que responde sanitariamente.
-> PF não doa Padaria: o produto artesanal caseiro tem o mesmo risco do preparado.
+> **v2.0: CPF só doa alimento não preparado, industrializado e lacrado** (ex.: saco de arroz, lata de óleo), **na embalagem original** e dentro da validade do rótulo. Hortifruti de PF saiu porque o produto in natura caseiro não tem rastreabilidade sanitária. A exigência de lacre é revalidada no questionário (4.5): embalagem aberta bloqueia o cadastro.
 
 ### 4.2 Validade efetiva: calculada pelo sistema
 
@@ -136,9 +156,74 @@ Vale sobre a **validade efetiva restante**. Abaixo do mínimo, o cadastro é **b
 1. O doador descreve o lote em texto livre, por exemplo: *"30 marmitas de arroz, feijão e frango feitas hoje ao meio-dia"*.
 2. **Guardrail de entrada:** limite de tamanho e remoção de padrões suspeitos antes de o texto chegar ao modelo.
 3. Um modelo **Hugging Face de embeddings multilíngue** compara o texto com **exemplos escritos à mão por categoria** (`src/models/exemplos_nlp.py`) e sugere **categoria** e **armazenamento**. O classificador só escolhe rótulos de uma lista fixa.
-   > Histórico: a primeira versão usava zero-shot por NLI e ficou em 49% de acurácia e 3,3 s por texto. A troca para similaridade levou a 76% e 4,6 ms (ver `reports/avaliacao_nlp.json`).
+   > Histórico: a primeira versão usava zero-shot por NLI e ficou em 49% de acurácia e 3,3 s por texto. A troca para similaridade levou a 76% e 4,6 ms (ver `reports/avaliacao_nlp.json`). Com o dataset v2.0, a mesma comparação deu 75,3% em 4,4 ms contra 50% em 3,8 s.
 4. **O doador confirma ou corrige.** A sugestão nunca é gravada sem confirmação.
 5. A regra da seção 4.1 (PF × categoria) é revalidada **no código** depois da confirmação.
+
+### 4.5 Questionário do lote e Declaração de Doação (v2.0)
+
+Depois de confirmar categoria e armazenamento, o doador responde um **questionário obrigatório**. As respostas viram um **documento auditável**: o registro de **o que** foi disponibilizado, **por quem**, **quando** e **em que condições**.
+
+**Perguntas**
+
+| ID | Pergunta | Vale para | Efeito |
+|---|---|---|---|
+| Q1 | Origem do alimento (excedente de produção, excedente de estoque, sobra de evento, outro) | Todas | Informativo |
+| Q2 | A embalagem ou o recipiente está íntegro (sem furo, estufamento, vazamento ou violação)? | Todas | **Não → bloqueia** |
+| Q3 | Contém alergênicos? (glúten, crustáceos, ovos, peixes, amendoim, soja, leite/lactose, castanhas, nenhum, não sei) | Todas | Informativo: segue para a ONG |
+| Q4 | Precisa ser cozido ou preparado antes de consumir? | Todas | Filtro de ONG: exige cozinha ou distribuição de cestas (6.4) |
+| Q5 | Declaro que o alimento está dentro do prazo de validade e mantém integridade, segurança sanitária e propriedades nutricionais (Lei 14.016/2020, art. 1º) | Todas | **Sem aceite → bloqueia** |
+| Q6 | O alimento ficou exposto ao consumidor (buffet, balcão de autosserviço, mesa)? | Preparado | **Sim → bloqueia** |
+| Q7 | O rótulo com a validade está visível? | Refrigerado, Congelado | **Não → bloqueia** (a validade efetiva depende do rótulo, 4.2) |
+| Q8 | O produto foi descongelado alguma vez? | Congelado | **Sim → bloqueia** (não pode ser recongelado) |
+| Q9 | Está lacrado na embalagem original de fábrica? | Doador PF | **Não → bloqueia** (4.1) |
+| Q10 | Foi selecionado (sem partes podres, mofo ou insetos)? | Hortifruti | **Não → bloqueia** |
+
+> Por que o questionário fica no código e não na IA: são condições de **segurança alimentar** e de **responsabilidade legal**. A Lei 14.016/2020 (art. 3º) diz que o doador só responde civilmente se agir com dolo. Por isso a declaração explícita do doador é a evidência central.
+
+**Declaração de Doação (documento auditável)**
+
+| Aspecto | Regra |
+|---|---|
+| Conteúdo | ID e versão, lote, doador (pseudônimo e tipo), data e hora (UTC), versão das regras, categoria e armazenamento **confirmados** + a **sugestão da IA** (com a confiança), peso, validade efetiva e a base do cálculo, respostas Q1–Q10, resultado (ACEITA ou BLOQUEADA, com os motivos) e o texto da declaração legal |
+| Integridade | JSON **canônico** (chaves ordenadas, UTF-8, sem espaços) → **SHA-256** → **assinatura RSA-PSS** (SHA-256, chave de 3072 bits) da plataforma (aula 3) |
+| Imutabilidade | Gravação só de inclusão. Uma correção gera **nova versão** que aponta para o hash da anterior. Nada é sobrescrito nem apagado |
+| Chaves | A chave privada fica fora do repositório (cofre de segredos/variável de ambiente). A chave pública é publicada para qualquer auditor verificar |
+| Leitura humana | **PDF** gerado a partir do JSON, com o hash e a assinatura impressos. O documento oficial é o JSON assinado |
+| Privacidade | Nenhum dado pessoal em claro: o doador aparece pelo pseudônimo (HMAC, seção 11) |
+| Retenção | 5 anos, igual à trilha de auditoria (10.1) |
+
+Uma declaração **BLOQUEADA também é guardada**. Ela prova que o sistema recusou o alimento, e por quê.
+
+### 4.6 Validação de entrada (v2.0)
+
+**Tudo que entra é dado não confiável até ser validado**: formulário, texto livre, arquivo, parâmetro de URL e também **resposta de serviço externo** (ex.: BrasilAPI).
+
+| Camada | O que verifica | Onde |
+|---|---|---|
+| 1. Esquema | Tipo estrito, formato, faixa, lista fechada (enum); **campo desconhecido é rejeitado** | `src/validacao/esquemas.py` (Pydantic) |
+| 2. Identidade | Dígito verificador de CPF/CNPJ, consulta à Receita (6.3) | `src/validacao/documentos.py`, `receita.py` |
+| 3. Conteúdo | Guardrail do texto livre (4.4) | `src/seguranca/guardrails.py` |
+| 4. Regra de negócio | PF × categoria, validade mínima, coerência entre datas, capacidade | `src/regras/` |
+| 5. Banco | Restrições (CHECK, NOT NULL, FK) repetem as faixas: defesa em profundidade | Supabase (CP3) |
+
+**Limites principais**
+
+| Campo | Regra |
+|---|---|
+| Peso do lote | 0,5 a 2.000 kg. De 2.000 a 10.000 kg vai para **revisão do admin** antes do matching. Acima de 10.000 kg é rejeitado (erro de digitação) |
+| Texto livre | Até 500 caracteres, depois do guardrail |
+| Hora do preparo | Com fuso horário, nunca no futuro (tolerância de 5 min de relógio), no máximo 72 h atrás |
+| Saída da refrigeração | Nunca no futuro (mesma tolerância), no máximo 24 h atrás |
+| Validade do rótulo / informada | Com fuso, no máximo 2 anos à frente |
+| CPF / CNPJ | Dígito verificador válido. CNPJ aceita o formato **alfanumérico** (IN RFB 2.229/2024, vigente desde jul/2026) |
+| Coordenadas | Dentro da caixa geográfica do recorte (RMSP) |
+| Capacidade da ONG | 1 a 10.000 kg/dia. Refrigerada ≤ total |
+| Janela de recebimento | Abertura < fechamento, horas entre 0 e 24 |
+| Pedido de ONG | kg ≤ capacidade diária; validade ≤ 7 dias; no máximo 3 pedidos abertos |
+
+**Falha fechada:** se a validação de um serviço externo falhar (fora do ar, resposta fora do esquema), o cadastro fica **pendente de revisão manual**. Nunca é aprovado por omissão.
+**Mensagem de erro:** o usuário recebe uma mensagem genérica que diz o campo e a regra, sem ecoar o valor recebido. O detalhe vai para o log operacional (10.1).
 
 ---
 
@@ -177,15 +262,41 @@ Faixas de **validade efetiva restante** (seção 4.2):
 
 ### 6.1 Ranking das ONGs
 
-Só entram no ranking as ONGs **aprovadas**, com **capacidade disponível** e **compatíveis** com a categoria (ex.: sem refrigeração, a ONG não recebe Refrigerado).
+**Etapa 1: filtros obrigatórios (regra no código, nunca no score).** A ONG só entra no ranking se **todos** valerem:
+
+| Filtro | Regra |
+|---|---|
+| Aprovada | Status `aprovada` (6.3) |
+| Raio | Até 20 km do doador |
+| Categoria aceita | A categoria está na lista que a ONG declarou (6.4) |
+| Refrigeração | Item de cadeia fria **fora da rota expressa** exige refrigeração; **Congelado** em freezer exige freezer |
+| Preparo | Lote que **requer preparo** (Q4) só vai para ONG com **cozinha** ou que **distribui cestas** (a família cozinha em casa) |
+| Capacidade | Capacidade do dia restante ≥ peso do lote |
+| Disponibilidade | O lote consegue **chegar dentro da janela de recebimento** antes do limite de consumo |
+| Rota expressa | ONG serve refeição no mesmo turno e o trajeto ≤ 30 min (7.5) |
+
+**Etapa 2: score de prioridade entre as elegíveis.**
 
 ```
-score = w1·proximidade + w2·capacidade_disponível + w3·vulnerabilidade_setor (IPVS) + w4·compatibilidade
+score = 0,30·acesso + 0,15·capacidade + 0,30·vulnerabilidade + 0,10·turno
+      + acesso · (0,15·complementaridade + 0,10·pedido_aberto)
 ```
 
-**Pesos:** w1 = 0,35 (proximidade) · w2 = 0,20 (capacidade) · w3 = 0,30 (vulnerabilidade) · w4 = 0,15 (compatibilidade). Os pesos ficam versionados no código e são auditáveis.
+| Componente | Cálculo |
+|---|---|
+| **acesso** (v2.0, substitui a distância) | `1 − min((tempo_até_receber − 30 min) / 60 min, 1)`, com `tempo_até_receber = max(30 min + trajeto, espera até a janela de recebimento abrir)`. Os **30 min** são a antecedência operacional (mediana de match + coleta). Sem ela, o sistema acharia que o lote chega "agora + trajeto" e escolheria ONGs que fecham antes da entrega. Ela é igual para todas as ONGs, então só a parte variável pontua. **60 min** ≈ trajeto do raio de 20 km fora do pico |
+| capacidade | Fração livre da capacidade do dia |
+| vulnerabilidade | Grupo IPVS do **setor** da ONG, de 1–6 normalizado para 0–1 |
+| turno | 1 se a ONG serve refeição antes do limite de consumo, senão 0,5 |
+| **complementaridade** (v2.0) | 1 = complementar · 0,5 = nenhum dos dois tem transporte · 0 = redundante (6.6) |
+| **pedido aberto** (v2.0) | 1 se a ONG tem pedido aberto da mesma categoria (6.5) |
 
-> Decisão de impacto social: a vulnerabilidade tem peso próximo ao da distância. Às vezes a comida vai um pouco mais longe para chegar a quem mais precisa.
+> **Por que complementaridade e pedido são multiplicados pelo acesso:** eles **desempatam entre ONGs acessíveis**, mas não puxam o lote para longe. Na calibração com o dataset simulado, somar os dois "por inteiro" levava o lote a ONGs com veículo mais distantes (o carro da ONG não é refrigerado). Isso aumentava a quebra de cadeia fria e o descarte em **1 p.p.** Multiplicados pelo acesso, o custo cai para **~0,2 p.p.**, e a maioria dos matches continua complementar (ver [PRD](prd.md), métricas).
+
+Os pesos ficam versionados no código (`src/regras/logistica.py`) e são auditáveis.
+
+> Decisão de impacto social: a vulnerabilidade continua com o mesmo peso do acesso. Às vezes a comida vai um pouco mais longe para chegar a quem mais precisa.
+> Por que **tempo até receber** e não distância: uma ONG a 2 km que só abre amanhã às 9 h é pior para uma marmita do que outra a 8 km aberta agora. A distância sozinha esconde isso.
 
 ### 6.2 Fluxo de aceite
 
@@ -209,16 +320,60 @@ A ONG **confere o lote na porta e pode recusá-lo** (produto amassado, estufado,
 
 ### 6.3 Verificação de ONG
 
-- CNPJ **ativo** com natureza jurídica de associação/fundação (validação simulada).
-- **Aprovação manual por Admin** antes de receber qualquer lote.
+A verificação vale para **todo CNPJ** (ONG e doador PJ) e tem três passos:
+
+| Passo | O que prova | Como |
+|---|---|---|
+| 1. Dígito verificador | Que o número **pode** existir (formato) | Cálculo módulo 11 no código. Aceita o **CNPJ alfanumérico** (IN RFB 2.229/2024): cada caractere vale `código ASCII − 48` |
+| 2. Consulta à Receita | Que o CNPJ **existe e está ativo** | BrasilAPI (gratuita), com cache de 24 h e timeout curto. A resposta é validada por esquema (4.6) |
+| 3. Aprovação humana | Que a entidade é quem diz ser | Admin aprova (ONG) |
+
+- **ONG:** situação **ATIVA** e natureza jurídica de entidade sem fins lucrativos: 306-9 Fundação Privada, 320-4 Fundação/Associação estrangeira no Brasil, 322-0 Organização Religiosa, 330-1 Organização Social, 399-9 Associação Privada.
+- **Doador PJ:** situação **ATIVA**. Se o CNAE principal não for do ramo de alimentos (agricultura, indústria de alimentos, atacado/varejo de alimentos, alimentação), o cadastro **não é bloqueado** mas vai para **revisão do admin** (ex.: refeitório de uma empresa de outro ramo).
+- Passo 1 falhou: rejeita na hora. Passo 2 indisponível: fica **pendente** (falha fechada, 4.6).
+- **Aprovação manual por Admin** antes de a ONG receber qualquer lote.
 - Só ONG aprovada pode solicitar uso do caixa solidário.
+
+> O dígito verificador **não prova** que o CNPJ é verdadeiro. Ele só pega erro de digitação e número inventado ao acaso. Quem prova existência é a consulta à Receita, e quem prova legitimidade é o admin.
 
 ### 6.4 Cadastro operacional da ONG
 
 Para entrar no matching, a ONG informa:
-- **Capacidade diária** (kg) e se possui **refrigeração** (e capacidade refrigerada);
-- **Turnos em que serve refeição** (`café` · `almoço` · `jantar` · `noturno`). O turno `noturno` (20 h–23 h) é o dos coletivos que distribuem refeições à noite, por exemplo à população em situação de rua. É obrigatório para receber lotes da rota expressa (7.5): o lote só vai para uma ONG cujo próximo turno comece antes de a validade efetiva vencer;
-- **Categorias aceitas** e **região atendida**.
+- **Capacidade diária** (kg) e se possui **refrigeração** (e capacidade refrigerada) e **freezer**;
+- **Cozinha:** tem espaço para preparar alimentos? Sem cozinha, a ONG **não recebe alimento que requer preparo** (Q4), exceto se **distribui cestas** às famílias;
+- **Distribui cestas:** entrega alimento para preparo em casa (cesta básica, sacolão);
+- **Janela de recebimento** (v2.0): horário em que recebe entregas (ex.: 8 h–18 h). Fora da janela, o lote espera, e essa espera entra no ranking (6.1);
+- **Veículo próprio** (v2.0): pode buscar o lote no doador (6.6);
+- **Turnos em que serve refeição** (`café` · `almoço` · `jantar` · `noturno`). O turno `noturno` (20 h–23 h) é o dos coletivos que distribuem refeições à noite, por exemplo à população em situação de rua. É obrigatório para receber lotes da rota expressa (7.5): o lote só vai para uma ONG cujo próximo turno comece antes de a validade efetiva vencer. ONG com turno noturno tem a janela de recebimento estendida até 23 h;
+- **Categorias aceitas:** a ONG **filtra** o que aceita. A lista não pode incluir algo que a estrutura não comporta: sem refrigeração não há como aceitar Refrigerado/Congelado, sem freezer não há como aceitar Congelado;
+- **Região atendida.**
+
+### 6.5 Pedidos da ONG (v2.0)
+
+A ONG pode **pedir** alimentos, e não só esperar ofertas.
+
+| Regra | Valor |
+|---|---|
+| Conteúdo | Categoria, kg desejados, validade do pedido, observação curta (passa pelo guardrail) |
+| Limites | kg ≤ capacidade diária · validade ≤ 7 dias · no máximo **3 pedidos abertos** por ONG |
+| Mural | Doadores veem os pedidos **agregados por região** (categoria e kg), nunca o endereço da ONG |
+| Ranking | Pedido aberto da mesma categoria do lote = **+0,10** no score (6.1) |
+| Atendimento | Cada entrega confirmada abate os kg do pedido. Atingido o total ou vencido o prazo, o pedido fecha |
+| Notificação | Só para doadores que **ativarem** essa opção, no máximo 1 aviso por dia por doador |
+| Abuso | ONG cujos pedidos ficam muito acima do que ela recebe/confirma (fora da linha de base, 10.2) gera alerta ao admin |
+
+### 6.6 Complementaridade busca × entrega (v2.0)
+
+Doador e ONG declaram se têm transporte: o doador **pode entregar**, a ONG **pode buscar**. Para não desperdiçar a capacidade logística da rede:
+
+| Doador entrega? | ONG busca? | Situação | Complementaridade |
+|:-:|:-:|---|:-:|
+| Sim | Não | **Complementar:** o doador leva | 1 |
+| Não | Sim | **Complementar:** a ONG busca | 1 |
+| Não | Não | Depende da cascata de transporte (7.2) | 0,5 |
+| Sim | Sim | **Redundante:** gasta o veículo da ONG que outro doador sem transporte precisaria | 0 |
+
+**É preferência forte, não proibição.** Se a única ONG viável for "redundante", o lote vai para ela mesmo assim: perder a comida é pior do que usar mal um veículo.
 
 ---
 
@@ -228,8 +383,9 @@ Para entrar no matching, a ONG informa:
 
 | Modalidade | Custo | Frota simulada | Observação |
 |---|---|---|---|
-| ONG / voluntário retira | Grátis | 70 voluntários | Disponibilidade esporádica |
-| Doador entrega | Grátis | — | Até a ONG ou até um hub |
+| ONG retira | Grátis | ONGs com **veículo próprio** (6.4) | Só se a ONG declarou que pode buscar |
+| Voluntário retira | Grátis | 70 voluntários | Disponibilidade esporádica |
+| Doador entrega | Grátis | Doadores que **podem entregar** (6.6) | Até a ONG ou até um hub |
 | Motorista autônomo (retorno) | Grátis | 65 motoristas | Aceita coleta no caminho de volta |
 | Transportadora parceira | Grátis | 25 empresas | Rotas fixas A→B; algumas com **baú refrigerado** |
 | Entregador de app | **Pago pelo caixa** | Pool externo simulado | Integração simulada (estilo UberEats / 99food / Keeta) |
@@ -295,7 +451,7 @@ Para lotes com validade efetiva curta: **preparado em ambiente** ou **item de ca
 - **Falso negativo** = comida perdida (custo social alto).
 - **Falso positivo** = gasto desnecessário do caixa.
 
-**Features (sem dados pessoais):** categoria, armazenamento, rota expressa, prioridade prevista, horas até vencer, peso, segmento/tipo de doador, **doador tem refrigeração**, região, hora do dia, dia da semana, mês, feriado, nº de ONGs compatíveis num raio de 10 km, distância da ONG mais bem ranqueada, nº de transportadores ativos no raio, disponibilidade de veículo refrigerado.
+**Features (sem dados pessoais):** categoria, armazenamento, rota expressa, prioridade prevista, horas até vencer, peso, segmento/tipo de doador, **doador tem refrigeração**, região, hora do dia, dia da semana, mês, feriado, nº de ONGs compatíveis num raio de 10 km, distância da ONG mais bem ranqueada, nº de transportadores ativos no raio, disponibilidade de veículo refrigerado. **v2.0:** minutos até a ONG do topo poder receber, doador pode entregar, requer preparo. (O mês fica de fora: com split temporal, os meses do teste nunca aparecem no treino.)
 
 **Rótulo (simulação do processo, não fórmula):** o lote é **descartado** se:
 - nenhuma ONG aceitar, **OU**
@@ -337,22 +493,127 @@ Os tempos são sorteados a partir de distribuições que dependem de hora, dia, 
 
 ---
 
-## 10. Rastreabilidade (logs)
+## 10. Rastreabilidade, observabilidade e controle da IA
 
-Toda decisão relevante gera um registro auditável, **sem dados pessoais em claro**:
+### 10.1 Logs: completos em cobertura, mínimos em conteúdo (v2.0)
+
+> A Aula 6 lista **"Logs completos"** como **risco**: guardar prompts inteiros com dados pessoais. O controle C5 da mesma aula diz *"minimizar, mascarar e definir retenção"*. Por isso **tudo é registrado**, mas **nada sensível vai em claro**.
+
+**O que gera registro (cobertura completa)**
+
+| Tipo | Exemplos | Trilha |
+|---|---|---|
+| Acesso | Toda requisição: rota, método, status, latência, usuário (pseudônimo), IP (HMAC) | Operacional |
+| Autenticação | Login, falha de login, logout, troca de senha, MFA | Auditoria |
+| Validação | Entrada rejeitada (campo e regra, **nunca o valor**), bloqueio do guardrail (motivo, tamanho e hash do texto) | Operacional |
+| Decisão de negócio | Cadastro, bloqueio, declaração emitida, oferta, aceite, recusa, escalada, transporte, entrega, inspeção | Auditoria |
+| Chamada de IA | Modelo, versão, hash das entradas, saída, confiança, latência, se houve fallback para a regra | Auditoria |
+| Dinheiro | Pedido, aprovação e negação do caixa, valores e aprovador | Auditoria |
+| Administração | Aprovação de ONG, mudança de parâmetro, desligamento de modelo, liberação de freio | Auditoria |
+| Observabilidade | Alertas emitidos e reconhecidos (10.2) | Operacional |
+
+**Formato:** uma linha JSON por evento, com `evento_id`, `ts` (UTC), `correlacao_id` (liga a requisição a todas as decisões que ela gerou), `componente`, `ator` (pseudônimo), `papel`, `acao`, `recurso`, `resultado` (`sucesso`, `negado`, `erro`), `detalhes`, `versao_regras`.
 
 ```json
-{
-  "componente": "matching-v1",
-  "ator": "ong:3f9a…",
-  "acao": "ACEITAR_LOTE",
-  "lote_id": "L-000123",
-  "modelo": "prioridade-v1",
-  "predicao": "CRITICA",
-  "fonte": "regras-de-negocio-v0.1",
-  "horario": "2026-09-23T19:42:00-03:00"
-}
+{"acao":"PREDICAO_PRIORIDADE","ator":"doador:7c1e…","componente":"ia.prioridade","correlacao_id":"5b0d…",
+ "detalhes":{"modelo":"prioridade-v2","saida":"CRITICA","confianca":0.91,"fallback":false},
+ "evento_id":"…","papel":"doador","recurso":"lote:L-000123","resultado":"sucesso",
+ "ts":"2026-10-05T19:42:00Z","versao_regras":"2.0","hash_anterior":"…","hash":"…"}
 ```
+
+**Minimização (aplicada no código, não na boa vontade de quem escreve o log):**
+- Chaves proibidas (`cpf`, `cnpj`, `nome`, `email`, `telefone`, `endereco`, `texto`, `senha`, `token`…) são **removidas** antes de gravar.
+- Valores com cara de CPF, CNPJ, e-mail ou telefone são **mascarados**.
+- O texto livre do doador **nunca** vai para o log: só o hash, o tamanho e os motivos do guardrail.
+
+**Integridade da trilha de auditoria:** cada registro carrega `hash_anterior` e `hash = HMAC-SHA256(chave, hash_anterior + registro)`. Alterar, apagar ou reordenar qualquer linha **quebra a cadeia** e a verificação aponta onde. Com HMAC (e não SHA-256 simples), quem tem acesso de escrita ao arquivo mas não tem a chave **não consegue recalcular** a cadeia.
+
+**Retenção**
+
+| Trilha | Prazo | Justificativa |
+|---|---|---|
+| Operacional (acesso, validação, alertas) | **90 dias** | Investigação de incidente e linha de base da observabilidade |
+| Auditoria (decisões, dinheiro, administração, declarações) | **5 anos** | Prazo do CDC (art. 27) para reparação de danos, por analogia. Cobre questionamentos sanitários e do caixa |
+
+### 10.2 Observabilidade: alertar no desvio, não só no teto (v2.0)
+
+O sistema não espera algo quebrar. Ele aprende o **comportamento normal** de cada sinal e avisa quando o valor **sai do normal**, mesmo que ainda esteja longe de qualquer teto.
+
+**Linha de base:** para cada sinal, mediana e MAD (desvio absoluto mediano) do histórico, **separados por faixa de hora e por dia útil/fim de semana**, porque as doações têm picos naturais (um sábado à noite agitado não é anomalia). Desvio robusto: `z = 0,6745 · (valor − mediana) / MAD`. Mediana e MAD não são distorcidos pelas próprias anomalias, ao contrário de média e desvio-padrão.
+
+| Nível | Quando | Ação |
+|---|---|---|
+| **Atenção** | `z ≥ 3,5` (critério de Iglewicz–Hoaglin) **ou** 70% de um teto | Registro + painel |
+| **Alerta** | `z ≥ 7` **ou** 90% de um teto | Painel em destaque. Se for sinal de **segurança**: **freio automático** |
+| **Crítico** | Bateu o teto / regra violada | O próprio teto bloqueia (regra no código) + alerta |
+
+Sem histórico mínimo (8 observações na faixa), o sinal fica em **aquecimento** e só o teto vale.
+
+**Sinais monitorados**
+
+| Sinal | Chave | Tipo |
+|---|---|---|
+| Requisições por minuto | usuário e IP | Segurança |
+| Falhas de login (15 min) | IP e conta | Segurança |
+| Bloqueios do guardrail (1 h) | usuário e global | Segurança |
+| Cadastros por dia | doador (comparado com o **próprio** histórico) | Negócio |
+| Peso do lote (em **escala log**: o desvio é medido em "vezes o normal") | doador | Negócio |
+| Recusas por dia | ONG | Negócio |
+| Pedidos × recebimentos | ONG | Negócio |
+| Gasto do caixa no dia | ONG (fração do teto) | Negócio |
+| Drift das entradas e das predições | modelo (PSI: < 0,1 estável · 0,1–0,25 atenção · > 0,25 alerta) | IA |
+| Latência p95 e taxa de erro (5 min) | rota | Operação |
+
+**Resultado no ano simulado** (`python -m src.observabilidade.demo` → `reports/observabilidade_demo.json`):
+
+| Pergunta | Resultado |
+|---|---|
+| Alarmes falsos em dados normais (fadiga) | Cadastros/dia: 1 atenção em 109.500 medições · Recusas/dia: 2 alertas em 7.795 · Peso: 1 alerta e 96 atenções em 25.045 lotes |
+| Anomalias injetadas | 25 lotes num dia → **ALERTA** · rajada de 200 req/min → **ALERTA** na 37ª requisição, com **freio aplicado** · caixa a 92% do teto → **ALERTA** · lote 50× o normal → **ATENÇÃO** |
+| Limite conhecido | Lote **10×** o normal do doador **não** dispara: o peso simulado varia muito, e 10× ainda está dentro da variação natural. A regra fixa de revisão humana acima de 2 t cobre os casos extremos |
+
+> Por que o peso é medido em escala log: peso é uma grandeza **multiplicativa**. Na escala linear, a cauda longa gerava alarme em 6% dos lotes normais (1.528 em um ano). Em log, caiu para 0,4% (97).
+
+**Freio automático (só para sinais de segurança, nível Alerta):** limite de requisições reduzido para a chave por **15 minutos**. É **reversível** (expira sozinho ou o admin libera) e fica registrado. Um humano revisa todo freio. Sinais de **negócio** nunca bloqueiam sozinhos: só avisam, porque um doador que doa muito mais num dia pode ser só um bom dia.
+
+### 10.3 Controle da IA (v2.0)
+
+A IA **recomenda**, nunca executa. O inventário completo (o que cada modelo lê, o que pode alterar, quem confirma, o que acontece se errar ou for atacado) está em [docs/governanca/analise-agencia-ia.md](governanca/analise-agencia-ia.md).
+
+| Controle | Regra |
+|---|---|
+| Desligamento por modelo | Cada modelo (NLP, M1, M2) pode ser desligado sem parar o sistema. Desligado, a regra assume: NLP → o doador escolhe a categoria sozinho; M1 → `prioridade_por_regra`; M2 → heurística v0 |
+| Piso de segurança do M1 | Se a regra diz **CRÍTICA**, a prioridade final é CRÍTICA, mesmo que o modelo diga outra coisa. O modelo pode **subir** a urgência, nunca baixar a de um caso crítico (o erro de baixar custa comida perdida) |
+| Saída validada | A saída de cada modelo é conferida contra a lista fechada de rótulos e a faixa [0, 1] de probabilidade. Fora disso, a regra assume e o evento vai para o log |
+| Integridade do artefato | O modelo só é carregado se o SHA-256 bater com os metadados |
+| Toda chamada é logada | Modelo, versão, entradas (hash), saída, confiança, latência, fallback (10.1) |
+
+### 10.4 Ciclo de feedback humano (RLHF adaptado, v2.0)
+
+O RLHF clássico (pré-treino → preferências humanas → modelo de recompensa → otimização por PPO) foi feito para LLM, e este sistema usa classificadores. A ideia central é a mesma: **o humano corrige a IA e a correção melhora o próximo modelo**. Adaptado em 4 passos:
+
+| Passo | O que acontece | Controle |
+|---|---|---|
+| 1. A IA sugere | NLP sugere categoria, M1 sugere prioridade, M2 estima risco | Toda sugestão é logada com a versão do modelo |
+| 2. O humano corrige | Doador corrige a categoria, admin/triador corrige a prioridade, ONG recusa na inspeção (rótulo de qualidade) | A correção é um evento de auditoria |
+| 3. O feedback é validado | Só de contas **verificadas**; no máximo **20 correções por ator por dia**; nenhum ator responde por mais de **2% dos rótulos novos**; ator com taxa de correção fora da linha de base vai para **quarentena** e revisão | Defesa contra **envenenamento de dados** (OWASP LLM04, MITRE ATLAS AML.T0020) |
+| 4. Retreino com portão | O modelo candidato só é promovido se **não piorar** (tolerância de 0,5 p.p.) no conjunto de teste fixo (que nunca recebe feedback), mantiver as metas (recall CRÍTICA ≥ 90%, recall descarte ≥ 85%) e um **humano diferente de quem treinou** aprovar | Versão anterior guardada para **rollback** |
+
+**Demonstração com o NLP real** (`python -m src.models.demo_feedback` → `reports/feedback_demo.json`). Foram 5.749 feedbacks: os doadores honestos do período de validação, 80 "correções" de um atacante (marmita → não perecível) e 30 de uma conta não verificada.
+
+| Candidato | Acurácia (teste fixo) | Preparado | Portão |
+|---|---|---|---|
+| Modelo atual | 75,3% | 68% | — |
+| Validado, **todos** os rótulos humanos (confirmações + correções) | **85,3%** | 72% | ✅ promovido |
+| Validado, **só as correções** | 66,0% | 54% | ❌ barrado (piorou) |
+| **Sem** a validação (com o veneno) | 86,3% | 72% | ⚠️ passaria |
+
+O que a demonstração mostra:
+1. **O passo 3 é a defesa central.** O atacante foi para a quarentena com 0 feedbacks aceitos, e a conta não verificada foi barrada. Sem essa validação, o veneno, diluído em 5,7 mil rótulos, **não mexe na métrica** e **passaria no portão**. Um envenenamento discreto não aparece na acurácia: por isso a origem do dado é validada antes.
+2. **O portão protege contra retreino ingênuo.** Treinar só com as correções (os textos difíceis) piorou o modelo, e o portão barrou.
+3. **Custo da quarentena:** 1 doador honesto que corrigia muito (60% vs. mediana de 24%) também foi para a quarentena. Ela gera **revisão humana**, não punição.
+4. **Limite:** a quarentena compara o ator com os pares e só funciona quando eles têm histórico (≥ 10 feedbacks). Com pouco feedback, só a cota por ator segura o atacante.
+5. **Ressalva:** o teste vem do mesmo gerador de frases do dataset simulado, então o ganho de 75% → 85% é otimista. O conjunto independente do grupo é a verificação real.
 
 ---
 
@@ -362,7 +623,8 @@ Toda decisão relevante gera um registro auditável, **sem dados pessoais em cla
   > Por que não SHA-256 com salt: existem só ~10⁹ CPFs válidos. Um hash sem segredo é revertido por **força bruta** em minutos (aula 3). Com HMAC, sem a chave o hash não serve para nada.
 - **Endereço de PF:** só o centroide do bairro até o aceite do match.
 - **Modelos de IA** nunca recebem nome, CPF, telefone ou endereço exato.
-- **Retenção:** dados de contato apagados/anonimizados 12 meses após a última atividade. Métricas agregadas são mantidas.
+- **Retenção:** dados de contato apagados/anonimizados 12 meses após a última atividade. Métricas agregadas são mantidas. Logs: 90 dias (operacional) e 5 anos (auditoria e declarações), sempre sem dado pessoal em claro (10.1).
+- **Governança:** inventário de dados (registro de tratamento, LGPD art. 37), classificação por campo, bases legais, RIPD e linhagem ficam em [docs/governanca](governanca/). A classificação é **verificada por teste**: uma coluna nova sem classificação quebra o pipeline.
 
 ---
 
@@ -412,3 +674,18 @@ Não existe um padrão brasileiro oficial de "kg doado → refeição". Por isso
 - [x] Pesos do ranking de ONGs (6.1): confirmados
 - [x] Fatores kg→refeição: método híbrido WRAP + TACO/PAT (12.1)
 - [x] Retenção de dados: 12 meses (11)
+
+**v2.0: decididos pelo grupo em 2026-10-05**
+- [x] PF só doa Não perecível lacrado (4.1)
+- [x] Logs completos em cobertura e mínimos em conteúdo, retenção 90 dias / 5 anos (10.1)
+- [x] Observabilidade por linha de base estatística, freio automático só para segurança (10.2)
+- [x] Questionário + Declaração assinada (RSA-PSS) e imutável (4.5)
+- [x] CNPJ: dígito verificador (com alfanumérico) + BrasilAPI (6.3)
+- [x] Pedidos de ONG, filtro por cozinha, tempo até receber, complementaridade como preferência (6.1, 6.4–6.6)
+- [x] Feedback humano em 4 passos (10.4)
+
+**v2.0: valores propostos na implementação, para o grupo revisar**
+- [ ] Pesos do score v2 (6.1): acesso 0,30 · capacidade 0,15 · vulnerabilidade 0,30 · turno 0,10 · complementaridade 0,15 · pedido +0,10
+- [ ] Perguntas Q7, Q8 e Q10 do questionário como bloqueio (4.5)
+- [ ] Faixa de peso que vai para revisão do admin: 2.000–10.000 kg (4.6)
+- [ ] Limites do feedback: 20 correções/ator/dia e 2% dos rótulos novos (10.4)
