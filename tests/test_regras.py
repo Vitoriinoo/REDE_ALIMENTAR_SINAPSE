@@ -8,14 +8,24 @@ from src.regras.dominio import Armazenamento as A
 from src.regras.dominio import Categoria as C
 from src.regras.dominio import Prioridade as Pr
 from src.regras.dominio import TipoDoador
+from src.regras.cadastro import DestinoCadastro, destino_por_peso
 from src.regras.logistica import (
     Aprovacao,
+    Complementaridade,
+    PedidoRecusado,
+    PerfilOng,
     aprovacao_necessaria,
+    categorias_suportadas,
+    complementaridade,
+    motivo_incompatibilidade,
     ong_aceita_categoria,
     pode_acionar_pago,
     pode_doar,
+    proxima_abertura,
     score_ong,
+    tempo_ate_receber,
     transporte_elegivel,
+    validar_pedido,
 )
 from src.regras.prioridade import prioridade_por_regra
 from src.regras.refeicoes import refeicoes
@@ -85,14 +95,23 @@ def test_lote_acima_de_50kg_sobe_um_nivel():
 
 
 # --- 4.1 Quem pode doar ------------------------------------------------------------------------
-@pytest.mark.parametrize("categoria", [C.PREPARADO, C.REFRIGERADO, C.CONGELADO, C.PADARIA])
-def test_pessoa_fisica_nao_doa_categorias_de_risco_sanitario(categoria):
+@pytest.mark.parametrize("categoria", [C.PREPARADO, C.REFRIGERADO, C.CONGELADO, C.PADARIA, C.HORTIFRUTI])
+def test_pessoa_fisica_so_doa_nao_perecivel(categoria):
+    """v2.0: CPF só doa alimento não preparado e lacrado (o lacre é a pergunta Q9)."""
     assert not pode_doar(TipoDoador.PF, categoria)
     assert pode_doar(TipoDoador.PJ, categoria)
 
 
-def test_pessoa_fisica_doa_hortifruti_e_nao_perecivel():
-    assert pode_doar(TipoDoador.PF, C.HORTIFRUTI) and pode_doar(TipoDoador.PF, C.NAO_PERECIVEL)
+def test_pessoa_fisica_doa_nao_perecivel():
+    assert pode_doar(TipoDoador.PF, C.NAO_PERECIVEL)
+
+
+# --- 4.6 Peso: faixa de revisão humana ---------------------------------------------------------
+def test_lote_acima_de_2_toneladas_vai_para_revisao_do_admin():
+    assert destino_por_peso(1_999) == DestinoCadastro.MATCHING
+    assert destino_por_peso(2_500) == DestinoCadastro.REVISAO_ADMIN
+    with pytest.raises(ValueError):
+        destino_por_peso(20_000)
 
 
 # --- 6.1 Matching -----------------------------------------------------------------------------------
@@ -102,8 +121,96 @@ def test_ong_sem_refrigeracao_nao_recebe_refrigerado_exceto_rota_expressa():
 
 
 def test_vulnerabilidade_do_setor_aumenta_o_score():
-    base = dict(distancia_km=5, fracao_capacidade_livre=0.5, serve_refeicao_a_tempo=True)
+    base = dict(tempo_ate_receber=m(45), fracao_capacidade_livre=0.5, serve_refeicao_a_tempo=True)
     assert score_ong(ipvs_grupo_setor=6, **base) > score_ong(ipvs_grupo_setor=1, **base)
+
+
+# --- 6.4 Filtros obrigatórios de compatibilidade ---------------------------------------------------
+def _perfil(**kw):
+    base = dict(categorias_aceitas=frozenset(C), tem_refrigeracao=True, tem_freezer=True, tem_cozinha=True,
+                distribui_cestas=False, pode_buscar=False, abertura_h=8.0, fechamento_h=18.0)
+    return PerfilOng(**(base | kw))
+
+
+def test_ong_sem_cozinha_nao_recebe_alimento_que_requer_preparo():
+    assert motivo_incompatibilidade(C.NAO_PERECIVEL, A.AMBIENTE, True, _perfil(tem_cozinha=False)) == "sem_cozinha"
+    assert motivo_incompatibilidade(C.NAO_PERECIVEL, A.AMBIENTE, False, _perfil(tem_cozinha=False)) is None
+
+
+def test_ong_que_distribui_cestas_recebe_alimento_cru_mesmo_sem_cozinha():
+    perfil = _perfil(tem_cozinha=False, distribui_cestas=True)
+    assert motivo_incompatibilidade(C.NAO_PERECIVEL, A.AMBIENTE, True, perfil) is None
+
+
+def test_ong_filtra_categorias_que_nao_aceita():
+    perfil = _perfil(categorias_aceitas=frozenset({C.NAO_PERECIVEL}))
+    assert motivo_incompatibilidade(C.PADARIA, A.AMBIENTE, False, perfil) == "categoria_nao_aceita"
+
+
+def test_congelado_exige_freezer_e_refrigerado_exige_refrigeracao():
+    assert motivo_incompatibilidade(C.CONGELADO, A.CONGELADO, False, _perfil(tem_freezer=False)) == "sem_freezer"
+    sem_frio = _perfil(tem_refrigeracao=False, tem_freezer=False)
+    assert motivo_incompatibilidade(C.REFRIGERADO, A.REFRIGERADO, False, sem_frio) == "sem_refrigeracao"
+
+
+def test_estrutura_limita_o_que_a_ong_pode_declarar():
+    assert C.REFRIGERADO not in categorias_suportadas(tem_refrigeracao=False, tem_freezer=False)
+    assert C.CONGELADO not in categorias_suportadas(tem_refrigeracao=True, tem_freezer=False)
+    assert C.CONGELADO in categorias_suportadas(tem_refrigeracao=True, tem_freezer=True)
+
+
+# --- 6.1 Disponibilidade: tempo até a ONG poder receber ---------------------------------------------
+def test_ong_fechada_espera_ate_abrir():
+    assert proxima_abertura(datetime(2026, 10, 5, 19, 0), 8, 18) == datetime(2026, 10, 6, 8, 0)
+    assert proxima_abertura(datetime(2026, 10, 5, 6, 0), 8, 18) == datetime(2026, 10, 5, 8, 0)
+    assert proxima_abertura(AGORA, 8, 18) == AGORA
+
+
+def test_ong_perto_que_so_abre_amanha_perde_para_ong_longe_aberta():
+    fim_de_tarde = datetime(2026, 10, 5, 17, 40)
+    perto_fechando = tempo_ate_receber(fim_de_tarde, m(5), 8, 18)  # chegaria 18:15: já fechou, só amanhã
+    longe_aberta = tempo_ate_receber(fim_de_tarde, m(35), 13, 22)
+    assert perto_fechando > h(14) and longe_aberta == m(30 + 35)
+    base = dict(fracao_capacidade_livre=0.5, ipvs_grupo_setor=4, serve_refeicao_a_tempo=True)
+    assert score_ong(longe_aberta, **base) > score_ong(perto_fechando, **base)
+
+
+# --- 6.5 / 6.6 Pedidos e complementaridade ---------------------------------------------------------
+def test_complementaridade_busca_x_entrega():
+    assert complementaridade(doador_pode_entregar=True, ong_pode_buscar=False) == Complementaridade.COMPLEMENTAR
+    assert complementaridade(doador_pode_entregar=False, ong_pode_buscar=True) == Complementaridade.COMPLEMENTAR
+    assert complementaridade(doador_pode_entregar=True, ong_pode_buscar=True) == Complementaridade.REDUNDANTE
+    assert complementaridade(doador_pode_entregar=False, ong_pode_buscar=False) == Complementaridade.SEM_TRANSPORTE
+
+
+def test_redundante_e_preferencia_nao_proibicao():
+    """A ONG redundante perde pontos, mas continua com score positivo (regras 6.6)."""
+    base = dict(tempo_ate_receber=m(40), fracao_capacidade_livre=0.5, ipvs_grupo_setor=4, serve_refeicao_a_tempo=True)
+    redundante = score_ong(complementaridade=Complementaridade.REDUNDANTE, **base)
+    assert 0 < redundante < score_ong(complementaridade=Complementaridade.COMPLEMENTAR, **base)
+
+
+def test_complementaridade_nao_puxa_lote_para_longe():
+    """Multiplicada pelo acesso: no limite do acesso (30 min + 60 min de trajeto) ela não vale nada."""
+    longe = dict(tempo_ate_receber=m(30 + 60), fracao_capacidade_livre=0.5, ipvs_grupo_setor=4,
+                 serve_refeicao_a_tempo=True)
+    assert score_ong(complementaridade=Complementaridade.COMPLEMENTAR, **longe) == pytest.approx(
+        score_ong(complementaridade=Complementaridade.REDUNDANTE, **longe))
+
+
+def test_pedido_aberto_da_bonus_no_ranking():
+    base = dict(tempo_ate_receber=m(40), fracao_capacidade_livre=0.5, ipvs_grupo_setor=4, serve_refeicao_a_tempo=True)
+    assert score_ong(tem_pedido_aberto=True, **base) > score_ong(tem_pedido_aberto=False, **base)
+
+
+def test_limites_do_pedido_da_ong():
+    validar_pedido(50, capacidade_kg_dia=80, validade=timedelta(days=7), pedidos_abertos=2)
+    with pytest.raises(PedidoRecusado):
+        validar_pedido(100, capacidade_kg_dia=80, validade=timedelta(days=3), pedidos_abertos=0)
+    with pytest.raises(PedidoRecusado):
+        validar_pedido(50, capacidade_kg_dia=80, validade=timedelta(days=8), pedidos_abertos=0)
+    with pytest.raises(PedidoRecusado):
+        validar_pedido(50, capacidade_kg_dia=80, validade=timedelta(days=3), pedidos_abertos=3)
 
 
 # --- 7.2 / 7.3 / 7.5 Transporte --------------------------------------------------------------------

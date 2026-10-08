@@ -39,6 +39,13 @@ class Modalidade(StrEnum):
     APP_ENTREGA = "app_entrega"  # única modalidade paga (caixa solidário)
 
 
+class Turno(StrEnum):
+    CAFE = "cafe"
+    ALMOCO = "almoco"
+    JANTAR = "jantar"
+    NOTURNO = "noturno"
+
+
 # Ordem de urgência, da mais para a menos urgente.
 ORDEM_PRIORIDADE = [Prioridade.CRITICA, Prioridade.ALTA, Prioridade.MEDIA, Prioridade.BAIXA]
 
