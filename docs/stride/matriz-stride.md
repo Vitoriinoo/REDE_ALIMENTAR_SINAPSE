@@ -104,24 +104,27 @@ flowchart LR
 
 ## 3. Resultado
 
+> **v2.0 (2026-10-05):** 7 ameaças novas (S5, T7, T8, T9, I7, D5, E6) vindas das regras v2.0, e 12 ameaças com o controle agora implementado e testado (S1, T1, T2, R1, R2, I5, D1, D2, E2, E4, …).
+
 | Nível | Inerente | Residual |
 |---|---|---|
-| 🔴 Crítico | **2** | **0** |
-| 🟠 Alto | **13** | **0** |
-| 🟡 Médio | 11 | 9 |
-| 🟢 Baixo | 1 | 18 |
-| **Total** | **27** | **27** |
+| 🔴 Crítico | **3** | **0** |
+| 🟠 Alto | **15** | **0** |
+| 🟡 Médio | 15 | 9 |
+| 🟢 Baixo | 1 | 25 |
+| **Total** | **34** | **34** |
 
-Distribuição por categoria: Tampering 6 · Information Disclosure 6 · Elevation of Privilege 5 · Spoofing 4 · Denial of Service 4 · Repudiation 2.
+Distribuição por categoria: Tampering 9 · Information Disclosure 7 · Elevation of Privilege 6 · Spoofing 5 · Denial of Service 5 · Repudiation 2.
 
-### 3.1 As duas ameaças críticas
+### 3.1 As três ameaças críticas
 
 | ID | Ameaça | Inerente | Controle principal | Residual |
 |---|---|---|---|---|
-| **S1** | ONG de fachada desvia alimentos e dinheiro do caixa | 4×5 = 20 🔴 | CNPJ + natureza jurídica + **aprovação manual do Admin**; só ONG aprovada usa o caixa | 2×4 = 8 🟡 |
-| **T1** | Doador informa validade falsa (ex.: marmita vencida) | 4×5 = 20 🔴 | **Validade calculada pelo sistema** a partir de preparo + armazenamento; inspeção na entrega | 2×4 = 8 🟡 |
+| **S1** | ONG de fachada desvia alimentos e dinheiro do caixa | 4×5 = 20 🔴 | **Dígito verificador + consulta à Receita** (ativa, sem fins lucrativos) + **aprovação manual do Admin**; só ONG aprovada usa o caixa | 2×4 = 8 🟡 |
+| **T1** | Doador informa validade falsa (ex.: marmita vencida) | 4×5 = 20 🔴 | **Validade calculada pelo sistema**; **questionário + declaração assinada**; inspeção na entrega | 2×4 = 8 🟡 |
+| **E6** | Cliente injeta campos (`"aprovado": true`) ou tipos trocados para pular regras | 4×4 = 16 🔴 | **Esquemas estritos** (`extra=forbid`, sem conversão de tipo, listas fechadas, faixas) | 1×3 = 3 🟢 |
 
-As duas continuam **médias**, não baixas, de propósito. O controle reduz a probabilidade, mas quem mente na hora do preparo ou monta uma fachada convincente ainda consegue passar. O risco residual fica **aceito e monitorado**: inspeção na entrega, reincidência por doador, relação aceites × entregas por ONG.
+S1 e T1 continuam **médias**, não baixas, de propósito. A Receita prova que o CNPJ está ativo, mas uma fachada pode ter CNPJ ativo. E quem mente no questionário ou na hora do preparo ainda consegue passar. O risco residual fica **aceito e monitorado**: inspeção na entrega, reincidência por doador, pedidos × recebimentos por ONG (linha de base). Há uma diferença em relação à v1.1: agora existe a **declaração assinada**, que transforma a mentira em responsabilidade documentada.
 
 ### 3.2 Riscos residuais médios (plano de tratamento)
 
@@ -141,7 +144,7 @@ As duas continuam **médias**, não baixas, de propósito. O controle reduz a pr
 
 Aplicação do ciclo de pentest da aula 9: **hipótese → execução → evidência → mitigação → reteste**.
 
-| Versão | Payloads do dataset (378) | Inéditos A (10) | Inéditos B (10, **reservado**) | Falsos positivos (benignos) |
+| Versão | Payloads do dataset (388) | Inéditos A (10) | Inéditos B (10, **reservado**) | Falsos positivos (benignos) |
 |---|---|---|---|---|
 | **v1** | 100% | 2/10 | 3/10 | 1/10 |
 | **v2** (normalização + padrões generalizados de A) | 100% | 10/10 | **4/10** | 0/10 |
@@ -162,6 +165,8 @@ O STRIDE cobre ameaças de segurança. Os riscos **éticos e operacionais** de I
 | A1 | **Viés geográfico** no ranking concentra doações | Vulnerabilidade por setor (IPVS) no score; monitorar kg por região; revisão dos pesos |
 | A2 | **Drift** do Modelo 2 | Retreino periódico com split temporal; monitorar recall/precisão; rollback |
 | A3 | **Confiança excessiva** na IA | IA só recomenda; justificativa visível; humano decide ações de impacto |
+| A4 | **Eficiência logística × comida perdida** | Complementaridade multiplicada pelo acesso (custo medido: ~0,2 p.p. de descarte) |
+| A5 | **Fadiga de alertas** | Três níveis; só alerta quando o nível sobe; sinais de negócio não bloqueiam |
 
 ---
 
@@ -169,8 +174,10 @@ O STRIDE cobre ameaças de segurança. Os riscos **éticos e operacionais** de I
 
 | Framework | Onde aparece |
 |---|---|
-| **OWASP Top 10 for LLM** | LLM01 (E1), LLM02 (I1, I5), LLM03 (T3, T4), LLM04 (T2), LLM05 (E4), LLM06 (E2, D4), LLM10 (D1) |
-| **MITRE ATLAS** | AML.T0051 (E1), AML.T0020 (T2), AML.T0010 (T3, T4), AML.T0024/T0040 (I3), AML.T0029 (D1) |
+| **OWASP Top 10 for LLM** | LLM01 (E1), LLM02 (I1, I5), LLM03 (T3, T4), LLM04 (T2, T9), LLM05 (E4, S5), LLM06 (E2, D4), LLM10 (D1) |
+| **OWASP API** | API1 BOLA (I2), API3 BOPLA (E6), API5 BFLA (E3) |
+| **MITRE ATLAS** | AML.T0051 (E1), AML.T0020 (T2, T9), AML.T0010 (T3, T4), AML.T0024/T0040 (I3), AML.T0029 (D1) |
+| **MITRE ATT&CK** | T1566 (S3), T1070 (T8), T1195 (E5) |
 | **NIST AI RMF** | *Governar*: regras e papéis (§3, §9) · *Mapear*: esta matriz · *Medir*: métricas e reteste · *Gerenciar*: tratamento dos residuais |
 | **Modelo 5C** (aula 7) | Contexto: texto livre = dado (E1) · Credenciais: MFA/RBAC (S3, E3) · Capacidades: IA só recomenda (E2) · Controles: logs, hashes, testes (R1, T3) · Consciência: humano aprova gasto (D4, E2) |
 | **Zero Trust** | Autorização por ONG (RLS), verificação contínua de integridade dos modelos (T3), segredos fora do código (I4) |

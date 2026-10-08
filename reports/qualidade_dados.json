@@ -1,0 +1,92 @@
+[
+  {
+    "checagem": "lote_id único",
+    "violacoes": 0,
+    "total": 25045,
+    "ok": true
+  },
+  {
+    "checagem": "lote aponta para doador existente",
+    "violacoes": 0,
+    "total": 25045,
+    "ok": true
+  },
+  {
+    "checagem": "lote aponta para ONG existente",
+    "violacoes": 0,
+    "total": 25045,
+    "ok": true
+  },
+  {
+    "checagem": "pedido aponta para ONG existente",
+    "violacoes": 0,
+    "total": 1420,
+    "ok": true
+  },
+  {
+    "checagem": "categoria na lista fechada",
+    "violacoes": 0,
+    "total": 25045,
+    "ok": true
+  },
+  {
+    "checagem": "armazenamento na lista fechada",
+    "violacoes": 0,
+    "total": 25045,
+    "ok": true
+  },
+  {
+    "checagem": "peso entre 0,5 e 10.000 kg",
+    "violacoes": 0,
+    "total": 25045,
+    "ok": true
+  },
+  {
+    "checagem": "validade efetiva preenchida",
+    "violacoes": 0,
+    "total": 25045,
+    "ok": true
+  },
+  {
+    "checagem": "doadores dentro do recorte geográfico",
+    "violacoes": 0,
+    "total": 300,
+    "ok": true
+  },
+  {
+    "checagem": "ongs dentro do recorte geográfico",
+    "violacoes": 0,
+    "total": 60,
+    "ok": true
+  },
+  {
+    "checagem": "PF só doa não perecível (regras 4.1)",
+    "violacoes": 0,
+    "total": 699,
+    "ok": true
+  },
+  {
+    "checagem": "lote válido tem prioridade",
+    "violacoes": 0,
+    "total": 23341,
+    "ok": true
+  },
+  {
+    "checagem": "ONG pendente/reprovada nunca recebe lote",
+    "violacoes": 0,
+    "total": 25045,
+    "ok": true
+  },
+  {
+    "checagem": "entrega acontece depois do cadastro",
+    "violacoes": 0,
+    "total": 19790,
+    "ok": true
+  },
+  {
+    "checagem": "texto livre sem CPF/CNPJ/e-mail/telefone",
+    "violacoes": 0,
+    "total": 25045,
+    "ok": true
+  }
+]

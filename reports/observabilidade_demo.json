@@ -1,0 +1,103 @@
+{
+  "dados_normais": {
+    "cadastros_por_dia": {
+      "medicoes": 109500,
+      "alertas": {
+        "ATENCAO": 1
+      },
+      "taxa_alerta_ou_mais": 0.0
+    },
+    "recusas_por_dia": {
+      "medicoes": 7795,
+      "alertas": {
+        "ATENCAO": 30,
+        "ALERTA": 2
+      },
+      "taxa_alerta_ou_mais": 0.00026
+    },
+    "gasto_caixa_dia": {
+      "medicoes": 479,
+      "alertas": {
+        "ATENCAO": 6
+      },
+      "taxa_alerta_ou_mais": 0.0
+    },
+    "peso_lote": {
+      "medicoes": 25045,
+      "alertas": {
+        "ATENCAO": 96,
+        "ALERTA": 1
+      },
+      "taxa_alerta_ou_mais": 4e-05
+    }
+  },
+  "anomalias_injetadas": [
+    {
+      "anomalia": "doador cadastra 25 lotes num dia",
+      "sinal": "cadastros_por_dia",
+      "detectado": true,
+      "nivel": "ALERTA",
+      "motivo": "desvio forte (z=16.9)"
+    },
+    {
+      "anomalia": "lote 10x mais pesado que o normal do doador",
+      "sinal": "peso_lote",
+      "detectado": false,
+      "nivel": "NORMAL",
+      "motivo": ""
+    },
+    {
+      "anomalia": "lote 50x mais pesado que o normal do doador",
+      "sinal": "peso_lote",
+      "detectado": true,
+      "nivel": "ATENCAO",
+      "motivo": "fora do normal (z=6.0)"
+    },
+    {
+      "anomalia": "ONG chega a R$ 185 de caixa no dia",
+      "sinal": "gasto_caixa_dia",
+      "detectado": true,
+      "nivel": "ALERTA",
+      "motivo": "aquecendo: histórico insuficiente, só o teto vale; 92% do teto"
+    },
+    {
+      "anomalia": "rajada de 200 requisições em 1 minuto",
+      "sinal": "requisicoes_por_minuto",
+      "detectado": true,
+      "nivel": "ALERTA",
+      "detectado_na_requisicao": 37,
+      "freio_aplicado": true
+    }
+  ],
+  "drift_treino_vs_teste": {
+    "horas_restantes": {
+      "psi": 0.003,
+      "nivel": "NORMAL"
+    },
+    "peso_kg": {
+      "psi": 0.0025,
+      "nivel": "NORMAL"
+    },
+    "dist_ong_top_km": {
+      "psi": 0.0041,
+      "nivel": "NORMAL"
+    },
+    "min_ate_receber_top": {
+      "psi": 0.0027,
+      "nivel": "NORMAL"
+    },
+    "categoria": {
+      "psi": 0.0015,
+      "nivel": "NORMAL"
+    },
+    "prioridade": {
+      "psi": 0.0011,
+      "nivel": "NORMAL"
+    },
+    "regiao": {
+      "psi": 0.0024,
+      "nivel": "NORMAL"
+    }
+  },
+  "gerado_em": "2026-10-05T23:53:40"
+}

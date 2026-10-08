@@ -1,0 +1,86 @@
+{
+  "feedbacks_recebidos": 5749,
+  "validacao": {
+    "aceitos": 5624,
+    "rejeitados": {
+      "conta_nao_verificada": 30,
+      "ator_em_quarentena": 95
+    },
+    "atores_em_quarentena": 2,
+    "quarentena": {
+      "doador:atacante": "taxa de correção 100% vs mediana 24% em categoria (z=8.6)",
+      "doador:d4a732cabfdf5047": "taxa de correção 60% vs mediana 24% em categoria (z=4.1)"
+    }
+  },
+  "atacante_aceito": 0,
+  "nao_verificado_aceito": 0,
+  "modelo_atual": {
+    "acuracia": 0.7533,
+    "acuracia_preparado": 0.68,
+    "por_categoria": {
+      "congelado": 1.0,
+      "hortifruti": 0.84,
+      "nao_perecivel": 0.74,
+      "padaria": 0.8,
+      "preparado": 0.68,
+      "refrigerado": 0.46
+    }
+  },
+  "candidatos": {
+    "validado_todos_os_rotulos": {
+      "acuracia": 0.8533,
+      "acuracia_preparado": 0.72,
+      "por_categoria": {
+        "congelado": 1.0,
+        "hortifruti": 0.94,
+        "nao_perecivel": 0.62,
+        "padaria": 0.96,
+        "preparado": 0.72,
+        "refrigerado": 0.88
+      },
+      "exemplos_novos": 5624,
+      "portao": {
+        "promover": true,
+        "motivos": []
+      }
+    },
+    "validado_so_correcoes": {
+      "acuracia": 0.66,
+      "acuracia_preparado": 0.54,
+      "por_categoria": {
+        "congelado": 0.66,
+        "hortifruti": 0.72,
+        "nao_perecivel": 0.5,
+        "padaria": 0.88,
+        "preparado": 0.54,
+        "refrigerado": 0.66
+      },
+      "exemplos_novos": 1400,
+      "portao": {
+        "promover": false,
+        "motivos": [
+          "acuracia piorou: 0.7533 -> 0.6600",
+          "acuracia_preparado abaixo da meta (0.54 < 0.66)"
+        ]
+      }
+    },
+    "sem_validacao_envenenado": {
+      "acuracia": 0.8633,
+      "acuracia_preparado": 0.72,
+      "por_categoria": {
+        "congelado": 1.0,
+        "hortifruti": 0.94,
+        "nao_perecivel": 0.66,
+        "padaria": 0.96,
+        "preparado": 0.72,
+        "refrigerado": 0.9
+      },
+      "exemplos_novos": 5719,
+      "portao": {
+        "promover": true,
+        "motivos": []
+      }
+    }
+  },
+  "ressalva": "Textos do teste vêm do mesmo gerador do dataset simulado: o ganho do candidato limpo é otimista."
+}
