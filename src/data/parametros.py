@@ -42,7 +42,7 @@ MIX_CATEGORIAS = {
     "padaria": {C.PADARIA: 0.75, C.PREPARADO: 0.15, C.REFRIGERADO: 0.10},
     "hortifruti": {C.HORTIFRUTI: 0.95, C.NAO_PERECIVEL: 0.05},
     "industria": {C.NAO_PERECIVEL: 0.60, C.REFRIGERADO: 0.20, C.CONGELADO: 0.20},
-    "pf": {C.NAO_PERECIVEL: 0.70, C.HORTIFRUTI: 0.30},
+    "pf": {C.NAO_PERECIVEL: 1.00},  # v2.0: CPF só doa não perecível lacrado (regras 4.1)
 }
 
 # Peso do lote (kg): lognormal com mediana e dispersão (sigma do log).
@@ -116,7 +116,16 @@ ONG_PROB_SERVE_REFEICAO = 0.70  # cozinhas comunitárias; as demais distribuem c
 # "noturno" = distribuição à noite (ex.: coletivos que atendem a população em situação de rua).
 ONG_TURNOS = {"cafe": (7, 8), "almoco": (11.5, 13.5), "jantar": (18, 19.5), "noturno": (20, 23)}
 ONG_PROB_TURNO = {"cafe": 0.35, "almoco": 0.90, "jantar": 0.55, "noturno": 0.20}
-ONG_FUNCIONAMENTO = (7, 21)
+# v2.0: capacidades declaradas (regras 6.4). Quem serve refeição quase sempre tem cozinha;
+# quem não serve distribui cestas (a família cozinha em casa).
+ONG_PROB_COZINHA = {True: 0.85, False: 0.15}  # chave = serve_refeicao
+ONG_PROB_CESTAS = {True: 0.30, False: 1.00}
+ONG_PROB_FREEZER_SE_REFRIGERACAO = 0.60
+ONG_PROB_VEICULO = 0.35  # pode buscar o lote no doador (regras 6.6)
+ONG_PROB_RECUSAR_CATEGORIA = 0.10  # preferência: a ONG tira da lista algo que a estrutura comportaria
+# Janela de recebimento (abertura, fechamento) e peso; ONG com turno noturno recebe até 23 h.
+ONG_JANELAS = [((7, 21), 0.40), ((8, 18), 0.35), ((9, 17), 0.15), ((13, 22), 0.10)]
+ONG_FECHAMENTO_NOTURNO = 23
 ONG_PROB_ACEITE_BASE = 0.78
 ONG_PROB_ACEITE_FORA_HORARIO = 0.25
 ONG_RESPOSTA_MEDIA_FRACAO_PRAZO = 0.45  # tempo de resposta ~ exponencial com média = fração do prazo
@@ -145,9 +154,13 @@ RAIO_TRANSPORTADOR_KM = 12.0
 DESVIO_MAX_ROTA_KM = 4.0  # transportadora aceita se o doador está até X km da rota A->B
 PROB_ACEITE_GRATUITO = 0.35
 TEMPO_ACEITE_GRATUITO_MEDIO_MIN = 22.0
-PROB_ONG_RETIRA = 0.30  # ONG tem veículo próprio disponível
-PROB_DOADOR_ENTREGA_PJ = 0.15
-PROB_DOADOR_ENTREGA_PF = 0.50  # PF leva até um hub
+# v2.0: buscar/entregar depende do que doador e ONG DECLARARAM (regras 6.6); estas são as
+# chances de o veículo declarado estar disponível no momento.
+PROB_ONG_RETIRA_DISPONIVEL = 0.70
+PROB_DOADOR_ENTREGA_DISPONIVEL = 0.60
+DOADOR_PROB_PODE_ENTREGAR = {
+    "restaurante": 0.25, "mercado": 0.35, "padaria": 0.20, "hortifruti": 0.40, "industria": 0.50, "pf": 0.60,
+}
 DOADOR_ENTREGA_DIST_MAX_KM = 6.0
 CHEGADA_ATE_DOADOR_MIN = (8, 35)
 ATRASO_HUB_MIN = (20, 60)
@@ -191,6 +204,33 @@ INTERVALO_RODADA_HORAS = 4.0
 HORARIO_OPERACAO = (7, 21)
 JANELA_RODADA_TRANSPORTE_MIN = 180
 MAX_RODADAS = 30
+
+# --- Questionário do lote (regras 4.5) -------------------------------------------------
+# Chance de o lote precisar de preparo antes do consumo (Q4): arroz cru sim, enlatado não.
+PROB_REQUER_PREPARO = {
+    C.PREPARADO: 0.0, C.PADARIA: 0.0, C.REFRIGERADO: 0.30, C.CONGELADO: 0.80, C.HORTIFRUTI: 0.50, C.NAO_PERECIVEL: 0.60,
+}
+# Respostas que bloqueiam (o doador declara a verdade na simulação).
+PROB_EMBALAGEM_VIOLADA = 0.010
+PROB_EXPOSTO_CONSUMIDOR = 0.030  # Preparado
+PROB_ROTULO_AUSENTE = 0.010  # Refrigerado, Congelado
+PROB_DESCONGELADO = 0.020  # Congelado
+PROB_PF_SEM_LACRE = 0.040
+PROB_HORTIFRUTI_NAO_SELECIONADO = 0.020
+# Alergênicos mais comuns por categoria (informativo, segue para a ONG).
+ALERGENICOS_PROVAVEIS = {
+    C.PREPARADO: ["gluten", "leite", "ovos", "soja"], C.REFRIGERADO: ["leite"], C.CONGELADO: ["peixes", "crustaceos"],
+    C.HORTIFRUTI: [], C.PADARIA: ["gluten", "leite", "ovos"], C.NAO_PERECIVEL: ["gluten", "soja", "amendoim"],
+}
+PROB_CADA_ALERGENICO = 0.35
+
+# --- Pedidos das ONGs (regras 6.5) -----------------------------------------------------
+PEDIDOS_POR_SEMANA_POR_ONG = 0.5
+PEDIDO_PESO_CATEGORIA = {
+    C.NAO_PERECIVEL: 0.40, C.HORTIFRUTI: 0.25, C.PREPARADO: 0.10, C.PADARIA: 0.10, C.REFRIGERADO: 0.10, C.CONGELADO: 0.05,
+}
+PEDIDO_FRACAO_CAPACIDADE = (0.3, 1.0)
+PEDIDO_VALIDADE_DIAS = (3, 7)
 
 # --- Textos --------------------------------------------------------------------------
 FRACAO_TEXTO_ADVERSARIAL = 0.015

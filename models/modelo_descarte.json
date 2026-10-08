@@ -1,8 +1,8 @@
 {
-  "treinado_em": "2026-09-23T23:54:49",
+  "treinado_em": "2026-10-05T23:43:58",
   "sklearn": "1.9.1",
   "dataset": "lotes.csv",
-  "sha256_dataset": "e0b669201d97463214074ca88a6179c2abb09fe5c61fabdc163ddd45de0da95b",
+  "sha256_dataset": "92099ce72a0dd732ada45e5b43345d59b3369242325a3505640b94a5c0483de2",
   "split": {
     "inicio_validacao": "2026-03-01",
     "inicio_teste": "2026-06-01"
@@ -22,39 +22,42 @@
     "n_ongs_compativeis_10km",
     "dist_ong_top_km",
     "n_transportadores_ativos_raio",
+    "min_ate_receber_top",
     "rota_expressa",
     "doador_tem_refrigeracao",
     "fim_de_semana",
     "feriado",
-    "refrigerado_disponivel"
+    "refrigerado_disponivel",
+    "doador_pode_entregar",
+    "requer_preparo"
   ],
-  "limiar": 0.2732,
+  "limiar": 0.2613,
   "metricas_teste": {
-    "modelo": "hist_gradient_boosting",
-    "limiar": 0.2732,
-    "acuracia": 0.616,
-    "precisao": 0.1974,
-    "recall": 0.8567,
-    "f1": 0.3209,
-    "roc_auc": 0.8267,
-    "pr_auc": 0.4411,
+    "modelo": "random_forest",
+    "limiar": 0.2613,
+    "acuracia": 0.6807,
+    "precisao": 0.2799,
+    "recall": 0.8339,
+    "f1": 0.4192,
+    "roc_auc": 0.8356,
+    "pr_auc": 0.5542,
     "heuristica_v0_no_teste": {
-      "acuracia": 0.8556,
-      "precisao": 0.373,
-      "recall": 0.5351,
-      "f1": 0.4396,
-      "roc_auc": 0.7143,
-      "pr_auc": 0.2488
+      "acuracia": 0.8291,
+      "precisao": 0.4016,
+      "recall": 0.4846,
+      "f1": 0.4392,
+      "roc_auc": 0.6844,
+      "pr_auc": 0.2658
     },
     "ingenuo_no_teste": {
-      "acuracia": 0.8941,
+      "acuracia": 0.8619,
       "precisao": 0.0,
       "recall": 0.0,
       "f1": 0.0,
       "roc_auc": null,
-      "pr_auc": 0.1059
+      "pr_auc": 0.1381
     },
-    "taxa_descarte_teste": 0.1059,
+    "taxa_descarte_teste": 0.1381,
     "matriz_confusao": {
       "ordem": [
         "salvo",
@@ -62,16 +65,16 @@
       ],
       "valores": [
         [
-          3255,
-          2285
+          3328,
+          1744
         ],
         [
-          94,
-          562
+          135,
+          678
         ]
       ]
     }
   },
   "artefato": "modelo_descarte.joblib",
-  "sha256_artefato": "39142f87ca1808a48a51547631c36daf507e27a4bb95ff6d18d6633cb345a04c"
+  "sha256_artefato": "a5310b5f6bd7913cb48c1f75a241aebbc18ed4c669e3b494bf40c7688fef3edf"
 }

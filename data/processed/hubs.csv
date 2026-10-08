@@ -1,41 +1,41 @@
 hub_id,cd_setor,regiao,municipio,ipvs_grupo,lat,lon,tipo,validado_admin
-H-01,351380105000722,Diadema,Diadema,2,-23.681552,-46.604957,comercio_parceiro,True
-H-02,351880005001374,Guarulhos,Guarulhos,2,-23.4901,-46.545064,comercio_parceiro,True
-H-03,352940105000253,Mauá,Mauá,4,-23.648342,-46.435744,estacionamento_conveniado,True
-H-04,353440105000540,Osasco,Osasco,2,-23.496308,-46.794741,ceu,True
-H-05,355030866000166,SP - Centro,São Paulo,1,-23.547111,-46.645679,comercio_parceiro,True
-H-06,355030859000202,SP - Leste 1,São Paulo,2,-23.51765,-46.530684,comercio_parceiro,True
-H-07,355030837000155,SP - Leste 2,São Paulo,2,-23.517432,-46.456708,sede_ong,True
-H-08,355030892000038,SP - Norte 1,São Paulo,2,-23.481943,-46.575509,estacionamento_conveniado,True
-H-09,355030811000063,SP - Norte 2,São Paulo,2,-23.472224,-46.679264,sede_ong,True
-H-10,355030865000186,SP - Oeste,São Paulo,2,-23.58714,-46.801323,estacionamento_conveniado,True
-H-11,355030868000104,SP - Sul 1,São Paulo,2,-23.648541,-46.602557,comercio_parceiro,True
-H-12,355030843000909,SP - Sul 2,São Paulo,6,-23.733496,-46.772652,sede_ong,True
-H-13,354780910000032,Santo André,Santo André,3,-23.771003,-46.412004,comercio_parceiro,True
-H-14,354870805000651,São Bernardo do Campo,São Bernardo do Campo,2,-23.713564,-46.590518,sede_ong,True
-H-15,354880705000490,São Caetano do Sul,São Caetano do Sul,1,-23.617465,-46.553952,comercio_parceiro,True
-H-16,355030802000108,SP - Oeste,São Paulo,1,-23.547909,-46.695104,comercio_parceiro,True
-H-17,355030890000580,SP - Sul 1,São Paulo,1,-23.575855,-46.639372,comercio_parceiro,True
-H-18,354870805001278,São Bernardo do Campo,São Bernardo do Campo,2,-23.673108,-46.589352,estacionamento_conveniado,True
-H-19,355030827000174,SP - Sul 1,São Paulo,1,-23.602289,-46.620718,sede_ong,True
-H-20,355030894000020,SP - Oeste,São Paulo,2,-23.594156,-46.740845,sede_ong,True
-H-21,355030808000023,SP - Leste 1,São Paulo,3,-23.542087,-46.60143,ceu,True
-H-22,355030855000671,SP - Sul 2,São Paulo,2,-23.806462,-46.73467,sede_ong,True
-H-23,355030802000115,SP - Oeste,São Paulo,1,-23.552061,-46.700527,ceu,True
-H-24,355030855000026,SP - Sul 2,São Paulo,4,-23.827386,-46.719908,sede_ong,True
-H-25,354780905001725,Santo André,Santo André,2,-23.661913,-46.518472,ceu,True
-H-26,355030868000394,SP - Sul 1,São Paulo,6,-23.620277,-46.592377,ceu,True
-H-27,355030825000372,SP - Leste 2,São Paulo,6,-23.589581,-46.385821,estacionamento_conveniado,True
-H-28,355030858000006,SP - Sul 2,São Paulo,6,-23.694735,-46.655614,sede_ong,True
-H-29,354870805000711,São Bernardo do Campo,São Bernardo do Campo,2,-23.663931,-46.593429,estacionamento_conveniado,True
-H-30,355030811000281,SP - Norte 2,São Paulo,2,-23.461259,-46.696265,ceu,True
-H-31,354870805000353,São Bernardo do Campo,São Bernardo do Campo,2,-23.690852,-46.545376,sede_ong,True
-H-32,354780905001056,Santo André,Santo André,2,-23.660827,-46.519897,ceu,True
-H-33,355030830000226,SP - Sul 2,São Paulo,2,-23.742352,-46.689942,ceu,True
-H-34,355030839000183,SP - Norte 1,São Paulo,5,-23.454589,-46.577848,sede_ong,True
-H-35,355030813000328,SP - Norte 2,São Paulo,4,-23.459168,-46.667352,ceu,True
-H-36,353440105000365,Osasco,Osasco,3,-23.543202,-46.811607,sede_ong,True
-H-37,354870805000167,São Bernardo do Campo,São Bernardo do Campo,2,-23.734369,-46.558462,ceu,True
-H-38,351880005000660,Guarulhos,Guarulhos,3,-23.42649,-46.511607,ceu,True
-H-39,355030866000049,SP - Centro,São Paulo,3,-23.552335,-46.642311,ceu,True
-H-40,355030813000170,SP - Norte 2,São Paulo,6,-23.45389,-46.670071,comercio_parceiro,True
+H-01,351380105000886,Diadema,Diadema,5,-23.718938,-46.614846,comercio_parceiro,True
+H-02,351880005001000,Guarulhos,Guarulhos,2,-23.450141,-46.519703,ceu,True
+H-03,352940105000099,Mauá,Mauá,2,-23.655888,-46.44814,comercio_parceiro,True
+H-04,353440105000421,Osasco,Osasco,2,-23.557784,-46.779421,estacionamento_conveniado,True
+H-05,355030869000357,SP - Centro,São Paulo,1,-23.535551,-46.658996,ceu,True
+H-06,355030876000522,SP - Leste 1,São Paulo,6,-23.615627,-46.511448,comercio_parceiro,True
+H-07,355030896000219,SP - Leste 2,São Paulo,4,-23.530345,-46.39624,estacionamento_conveniado,True
+H-08,355030882000030,SP - Norte 1,São Paulo,2,-23.480369,-46.595211,sede_ong,True
+H-09,355030829000209,SP - Norte 2,São Paulo,2,-23.476131,-46.706476,estacionamento_conveniado,True
+H-10,355030806000007,SP - Oeste,São Paulo,5,-23.51262,-46.686595,sede_ong,True
+H-11,355030877000291,SP - Sul 1,São Paulo,1,-23.608293,-46.633269,comercio_parceiro,True
+H-12,355030858000289,SP - Sul 2,São Paulo,6,-23.687566,-46.653377,comercio_parceiro,True
+H-13,354780908000007,Santo André,Santo André,2,-23.637086,-46.494999,comercio_parceiro,True
+H-14,354870805000375,São Bernardo do Campo,São Bernardo do Campo,2,-23.708827,-46.52048,ceu,True
+H-15,354880705000438,São Caetano do Sul,São Caetano do Sul,2,-23.625575,-46.56788,comercio_parceiro,True
+H-16,355030880000225,SP - Leste 1,São Paulo,3,-23.530462,-46.554272,sede_ong,True
+H-17,355030842000322,SP - Norte 2,São Paulo,6,-23.425246,-46.714483,sede_ong,True
+H-18,355030843000599,SP - Sul 2,São Paulo,3,-23.69762,-46.773426,sede_ong,True
+H-19,355030832000279,SP - Sul 1,São Paulo,1,-23.591556,-46.670335,ceu,True
+H-20,353440105000380,Osasco,Osasco,2,-23.502909,-46.80056,ceu,True
+H-21,351880010000213,Guarulhos,Guarulhos,6,-23.45327,-46.465839,sede_ong,True
+H-22,355030869000129,SP - Centro,São Paulo,2,-23.532962,-46.654063,estacionamento_conveniado,True
+H-23,355030835000380,SP - Oeste,São Paulo,1,-23.618454,-46.69821,ceu,True
+H-24,355030842000041,SP - Norte 2,São Paulo,2,-23.444028,-46.749513,ceu,True
+H-25,355030846000314,SP - Sul 2,São Paulo,6,-23.688617,-46.743813,ceu,True
+H-26,355030848000013,SP - Oeste,São Paulo,1,-23.529736,-46.696437,sede_ong,True
+H-27,355030807000227,SP - Centro,São Paulo,1,-23.566622,-46.642037,comercio_parceiro,True
+H-28,355030877000494,SP - Sul 1,São Paulo,1,-23.614769,-46.658618,ceu,True
+H-29,355030830000876,SP - Sul 2,São Paulo,5,-23.739414,-46.671426,sede_ong,True
+H-30,355030822000547,SP - Sul 2,São Paulo,6,-23.690041,-46.640812,estacionamento_conveniado,True
+H-31,355030844000057,SP - Leste 2,São Paulo,2,-23.489176,-46.422781,comercio_parceiro,True
+H-32,355030836000467,SP - Leste 2,São Paulo,4,-23.508064,-46.385348,comercio_parceiro,True
+H-33,355030873000191,SP - Leste 2,São Paulo,2,-23.586806,-46.500752,estacionamento_conveniado,True
+H-34,355030891000183,SP - Leste 1,São Paulo,2,-23.532626,-46.520782,estacionamento_conveniado,True
+H-35,353440105001330,Osasco,Osasco,3,-23.553594,-46.793568,sede_ong,True
+H-36,354870805002108,São Bernardo do Campo,São Bernardo do Campo,4,-23.725218,-46.559101,comercio_parceiro,True
+H-37,355030832000268,SP - Sul 1,São Paulo,1,-23.602059,-46.669917,comercio_parceiro,True
+H-38,355030801000050,SP - Leste 1,São Paulo,2,-23.570969,-46.579972,sede_ong,True
+H-39,353440105000884,Osasco,Osasco,2,-23.545993,-46.810252,sede_ong,True
+H-40,355030825000201,SP - Leste 2,São Paulo,5,-23.588143,-46.392092,sede_ong,True

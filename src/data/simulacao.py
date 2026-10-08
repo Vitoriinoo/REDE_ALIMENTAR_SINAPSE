@@ -23,14 +23,19 @@ from src.regras.logistica import (
     PRAZO_ACEITE_ONG,
     RAIO_MAXIMO_KM,
     Aprovacao,
+    PerfilOng,
     aprovacao_necessaria,
-    ong_aceita_categoria,
+    complementaridade,
+    motivo_incompatibilidade,
     pode_acionar_pago,
     pode_doar,
+    proxima_abertura,
     score_ong,
+    tempo_ate_receber,
     trajeto_maximo,
     transporte_elegivel,
 )
+from src.regras.questionario import Alergenico, Origem, Respostas, avaliar
 from src.regras.prioridade import prioridade_por_regra
 from src.regras.refeicoes import refeicoes
 from src.regras.validade import (
@@ -79,14 +84,46 @@ class Simulador:
     hubs: pd.DataFrame
     transportadores: pd.DataFrame
     contexto_diario: pd.DataFrame
+    pedidos: pd.DataFrame | None = None
     eventos: list[dict] = field(default_factory=list)
     ong_kg_dia: dict = field(default_factory=lambda: defaultdict(float))
     caixa_dia: dict = field(default_factory=lambda: defaultdict(float))
 
     def __post_init__(self):
         self.ongs_ok = self.ongs[self.ongs["status_aprovacao"] == "aprovada"].reset_index(drop=True)
+        self.perfis = [
+            PerfilOng(
+                categorias_aceitas=frozenset(Categoria(c) for c in o.categorias_aceitas.split("|")),
+                tem_refrigeracao=bool(o.tem_refrigeracao), tem_freezer=bool(o.tem_freezer),
+                tem_cozinha=bool(o.tem_cozinha), distribui_cestas=bool(o.distribui_cestas),
+                pode_buscar=bool(o.pode_buscar), abertura_h=float(o.abertura_h), fechamento_h=float(o.fechamento_h),
+            )
+            for o in self.ongs_ok.itertuples()
+        ]
         self.ctx = self.contexto_diario.set_index("data")
         self.ativos = self._sortear_transportadores_ativos()
+        # Pedidos abertos por (ONG, categoria): [abertura, expira, kg_restante, pedido_id] (regras 6.5).
+        self._pedidos: dict[tuple[str, str], list[list]] = defaultdict(list)
+        if self.pedidos is not None:
+            for p in self.pedidos.sort_values("ts_abertura").itertuples():
+                self._pedidos[(p.ong_id, p.categoria)].append([p.ts_abertura, p.ts_expira, float(p.kg), p.pedido_id])
+
+    # ---------- pedidos das ONGs ----------
+    def _pedido_aberto(self, ong_id: str, categoria: Categoria, ts: datetime) -> list | None:
+        for p in self._pedidos.get((ong_id, str(categoria)), ()):
+            if p[0] <= ts < p[1] and p[2] > 0:
+                return p
+        return None
+
+    def _atender_pedido(self, ong_id: str, categoria: Categoria, ts: datetime, kg: float) -> str | None:
+        p = self._pedido_aberto(ong_id, categoria, ts)
+        if p is None:
+            return None
+        p[2] = max(0.0, p[2] - kg)
+        return p[3]
+
+    def kg_restante_por_pedido(self) -> dict[str, float]:
+        return {p[3]: p[2] for lista in self._pedidos.values() for p in lista}
 
     # ---------- preparação ----------
     def _sortear_transportadores_ativos(self) -> dict[date, np.ndarray]:
@@ -160,12 +197,39 @@ class Simulador:
         else:
             texto, tipo_adv = descricao(rng, categoria, armazenamento, peso), None
 
+        respostas = self._questionario(doador, categoria)
+        motivos_q = avaliar(categoria, TipoDoador(doador.tipo_doador), respostas)
+
         return {
             "categoria": str(categoria), "armazenamento": str(armazenamento), "peso_kg": round(peso, 1),
             "descricao_texto": texto, "texto_adversarial": tipo_adv is not None, "tipo_adversarial": tipo_adv,
             **info, "validade_efetiva": validade, "horas_restantes": round((validade - ts) / timedelta(hours=1), 2),
             "rota_expressa": em_rota_expressa(categoria, armazenamento),
+            "requer_preparo": respostas.requer_preparo,
+            "alergenicos": "|".join(sorted(a.value for a in respostas.alergenicos)),
+            "bloqueio_questionario": "|".join(motivos_q) or None,
         }
+
+    def _questionario(self, doador, categoria: Categoria) -> Respostas:
+        """Respostas do doador (regras 4.5). Na simulação o doador declara a verdade."""
+        rng = self.rng
+        provaveis = [a for a in P.ALERGENICOS_PROVAVEIS[categoria] if rng.random() < P.PROB_CADA_ALERGENICO]
+        alergenicos = frozenset(Alergenico(a) for a in provaveis) or frozenset({Alergenico.NENHUM})
+        pf = doador.tipo_doador == "PF"
+        refrig_ou_cong = categoria in (Categoria.REFRIGERADO, Categoria.CONGELADO)
+        return Respostas(
+            origem=Origem.EXCEDENTE_ESTOQUE if categoria == Categoria.NAO_PERECIVEL else Origem.EXCEDENTE_PRODUCAO,
+            embalagem_integra=bool(rng.random() >= P.PROB_EMBALAGEM_VIOLADA),
+            alergenicos=alergenicos,
+            requer_preparo=bool(rng.random() < P.PROB_REQUER_PREPARO[categoria]),
+            declaracao_condicoes=True,
+            exposto_consumidor=bool(rng.random() < P.PROB_EXPOSTO_CONSUMIDOR) if categoria == Categoria.PREPARADO else None,
+            rotulo_visivel=bool(rng.random() >= P.PROB_ROTULO_AUSENTE) if refrig_ou_cong else None,
+            descongelado=bool(rng.random() < P.PROB_DESCONGELADO) if categoria == Categoria.CONGELADO else None,
+            lacrado_original=bool(rng.random() >= P.PROB_PF_SEM_LACRE) if pf else None,
+            selecionado=bool(rng.random() >= P.PROB_HORTIFRUTI_NAO_SELECIONADO)
+            if categoria == Categoria.HORTIFRUTI else None,
+        )
 
     def _rotulo_prioridade(self, regra: Prioridade, expressa: bool) -> Prioridade:
         # Discordância de triadores humanos (±1 nível). A rota expressa é inequívoca: sem ruído.
@@ -191,27 +255,43 @@ class Simulador:
         return False
 
     def _ranking_ongs(self, doador, cad: dict, categoria: Categoria, armazenamento: Armazenamento, ts: datetime):
+        """Filtros obrigatórios (regras 6.1, etapa 1) e score v2 (etapa 2).
+
+        Cada candidato: dict com score, índice da ONG, distância, kg já usados no dia,
+        minutos até poder receber, complementaridade e se havia pedido aberto.
+        """
         o = self.ongs_ok
         dist = distancia_km(doador.lat, doador.lon, o["lat"].to_numpy(), o["lon"].to_numpy())
         limite_consumo = cad["validade_efetiva"] - timedelta(hours=P.MARGEM_CONSUMO_HORAS[categoria])
         dia = ts.date()
         candidatos = []
         for i, ong in enumerate(o.itertuples()):
+            perfil = self.perfis[i]
             if dist[i] > RAIO_MAXIMO_KM:
                 continue
-            if not ong_aceita_categoria(categoria, armazenamento, bool(ong.tem_refrigeracao)):
+            if motivo_incompatibilidade(categoria, armazenamento, cad["requer_preparo"], perfil) is not None:
                 continue
             usado = self.ong_kg_dia[(ong.ong_id, dia)]
             if usado + cad["peso_kg"] > ong.capacidade_kg_dia:
                 continue
             a_tempo = self._turno_a_tempo(ong.turnos, ts, limite_consumo)
+            trajeto = timedelta(minutes=self._minutos_trajeto(dist[i], "carro", ts, False, estimada=True))
+            ate_receber = tempo_ate_receber(ts, trajeto, perfil.abertura_h, perfil.fechamento_h)
+            if ts + ate_receber > limite_consumo:  # disponibilidade: não consegue receber a tempo
+                continue
             if cad["rota_expressa"]:
-                trajeto = timedelta(minutes=self._minutos_trajeto(dist[i], "moto", ts, False, estimada=True))
-                if not a_tempo or not transporte_elegivel(categoria, armazenamento, False, trajeto):
+                trajeto_moto = timedelta(minutes=self._minutos_trajeto(dist[i], "moto", ts, False, estimada=True))
+                if not a_tempo or not transporte_elegivel(categoria, armazenamento, False, trajeto_moto):
                     continue
             livre = 1 - usado / ong.capacidade_kg_dia
-            candidatos.append((score_ong(dist[i], livre, int(ong.ipvs_grupo), a_tempo), i, float(dist[i]), usado))
-        candidatos.sort(reverse=True)
+            comp = complementaridade(bool(doador.pode_entregar), perfil.pode_buscar)
+            pedido = self._pedido_aberto(ong.ong_id, categoria, ts) is not None
+            candidatos.append({
+                "score": score_ong(ate_receber, livre, int(ong.ipvs_grupo), a_tempo, comp, pedido), "i": i,
+                "km": float(dist[i]), "usado": usado, "min_receber": ate_receber / MIN,
+                "complementaridade": str(comp), "pedido": pedido,
+            })
+        candidatos.sort(key=lambda c: c["score"], reverse=True)
         return candidatos
 
     def _oferecer_ongs(self, lote_id: str, ranking, prioridade: Prioridade, ts: datetime):
@@ -219,12 +299,12 @@ class Simulador:
         rng, o = self.rng, self.ongs_ok
         prazo = PRAZO_ACEITE_ONG[prioridade]
         t = ts
-        for n, (_, i, _, usado) in enumerate(ranking[:MAX_RECUSAS_ANTES_DE_ESCALAR], start=1):
+        for n, cand in enumerate(ranking[:MAX_RECUSAS_ANTES_DE_ESCALAR], start=1):
+            i, usado = cand["i"], cand["usado"]
             ong = o.iloc[i]
             ator = f"ong:{ong.ong_id}"
             self._evento(lote_id, t, "OFERTA_ONG", ator, f"prazo={int(prazo / MIN)}min")
-            noturna = "noturno" in ong.turnos and 19 <= _horas(t) < 23
-            fora = not (P.ONG_FUNCIONAMENTO[0] <= _horas(t) < P.ONG_FUNCIONAMENTO[1]) and not noturna
+            fora = not (ong.abertura_h <= _horas(t) < ong.fechamento_h)
             p = P.ONG_PROB_ACEITE_FORA_HORARIO if fora else P.ONG_PROB_ACEITE_BASE
             p *= 1 - 0.8 * (usado / ong.capacidade_kg_dia) ** 2
             resposta = timedelta(minutes=float(rng.exponential(P.ONG_RESPOSTA_MEDIA_FRACAO_PRAZO * prazo / MIN)))
@@ -245,7 +325,7 @@ class Simulador:
         self._evento(lote_id, t, "ESCALADA_ADMIN", "admin", f"{n_ofertas} recusas/expirações")
         t += timedelta(minutes=float(rng.uniform(*P.ADMIN_ATRASO_MIN)))
         if rng.random() < P.ADMIN_PROB_REALOCAR:
-            i = ranking[MAX_RECUSAS_ANTES_DE_ESCALAR][1]
+            i = ranking[MAX_RECUSAS_ANTES_DE_ESCALAR]["i"]
             self._evento(lote_id, t, "REALOCACAO_ADMIN", "admin", f"ong:{o.iloc[i].ong_id}")
             return i, t, n_ofertas + 1, True
         return None, t, n_ofertas, True
@@ -255,10 +335,11 @@ class Simulador:
         """Lista (modalidade, veiculo, refrigerado, transportador_id, prob_aceite, tempo_medio_min)."""
         cand = []
         tipo = TipoDoador(doador.tipo_doador)
-        if km <= P.DOADOR_ENTREGA_DIST_MAX_KM or tipo == TipoDoador.PF:
-            p = P.PROB_DOADOR_ENTREGA_PF if tipo == TipoDoador.PF else P.PROB_DOADOR_ENTREGA_PJ
-            cand.append((Modalidade.DOADOR_ENTREGA, "carro", False, None, p, 10.0))
-        cand.append((Modalidade.ONG_RETIRA, "carro", False, None, P.PROB_ONG_RETIRA, 12.0))
+        # v2.0: só entrega/busca quem DECLAROU ter transporte (regras 6.6).
+        if doador.pode_entregar and (km <= P.DOADOR_ENTREGA_DIST_MAX_KM or tipo == TipoDoador.PF):
+            cand.append((Modalidade.DOADOR_ENTREGA, "carro", False, None, P.PROB_DOADOR_ENTREGA_DISPONIVEL, 10.0))
+        if ong.pode_buscar:
+            cand.append((Modalidade.ONG_RETIRA, "carro", False, None, P.PROB_ONG_RETIRA_DISPONIVEL, 12.0))
 
         t = self.transportadores.iloc[self.ativos[ts.date()]]
         if len(t):
@@ -342,6 +423,9 @@ class Simulador:
         base |= cad
         self._evento(lote_id, ts, "CADASTRO", f"doador:{doador.doador_id}", categoria)
 
+        if cad["bloqueio_questionario"]:
+            self._evento(lote_id, ts, "BLOQUEIO_QUESTIONARIO", "sistema", cad["bloqueio_questionario"])
+            return base | {"status_final": "BLOQUEADO", "motivo_descarte": "QUESTIONARIO"}
         try:
             restante = validar_aceite(categoria, armazenamento, cad["validade_efetiva"], ts)
         except LoteRecusado as e:
@@ -362,8 +446,10 @@ class Simulador:
             "prioridade_regra": str(regra), "prioridade": str(prioridade),
             "hora": ts.hour, "dia_semana": ts.weekday(), "mes": ts.month, "fim_de_semana": ts.weekday() >= 5,
             "feriado": bool(ctx["feriado"]),
-            "n_ongs_compativeis_10km": sum(1 for c in ranking if c[2] <= 10),
-            "dist_ong_top_km": round(ranking[0][2], 2) if ranking else None,
+            "n_ongs_compativeis_10km": sum(1 for c in ranking if c["km"] <= 10),
+            "dist_ong_top_km": round(ranking[0]["km"], 2) if ranking else None,
+            "min_ate_receber_top": round(ranking[0]["min_receber"], 1) if ranking else None,
+            "doador_pode_entregar": bool(doador.pode_entregar),
             "n_transportadores_ativos_raio": int(perto.sum()),
             "refrigerado_disponivel": bool(t_at["refrigerado"].to_numpy()[perto].any()) if len(t_at) else False,
             "doador_tem_refrigeracao": bool(doador.tem_refrigeracao),
@@ -421,7 +507,10 @@ class Simulador:
 
         ong = self.ongs_ok.iloc[idx]
         t_aceite = t
-        extra |= {"ong_id": ong.ong_id, "ts_aceite_ong": t_aceite, "minutos_ate_match": round((t_aceite - ts) / MIN, 1)}
+        escolhida = next((c for c in ranking if c["i"] == idx), None)
+        extra |= {"ong_id": ong.ong_id, "ts_aceite_ong": t_aceite, "minutos_ate_match": round((t_aceite - ts) / MIN, 1),
+                  "complementaridade": escolhida["complementaridade"] if escolhida else None,
+                  "ong_tinha_pedido": escolhida["pedido"] if escolhida else None}
         if t_aceite >= limite:
             return descarte("VENCEU_AGUARDANDO_ONG", t_aceite)
 
@@ -481,10 +570,13 @@ class Simulador:
         minutos = self._minutos_trajeto(km, veiculo, t_coleta, chuva, estimada=False)
         if hub_id:
             minutos += rng.uniform(*P.ATRASO_HUB_MIN)
-        t_entrega = t_coleta + timedelta(minutes=float(minutos))
+        # A ONG só recebe dentro da janela declarada (regras 6.4): fora dela, o lote espera.
+        t_chegada = t_coleta + timedelta(minutes=float(minutos))
+        t_entrega = proxima_abertura(t_chegada, float(ong.abertura_h), float(ong.fechamento_h))
         extra |= {
             "modalidade": str(modalidade), "transportador_id": transp_id, "hub_id": hub_id, "acionou_pago": pago,
             "ts_coleta": t_coleta, "minutos_trajeto": round(minutos, 1),
+            "minutos_espera_janela": round((t_entrega - t_chegada) / MIN, 1),
         }
 
         limite_trajeto = trajeto_maximo(categoria, armazenamento, refrigerado)
@@ -505,6 +597,7 @@ class Simulador:
             return descarte("RECUSADO_NA_INSPECAO", t_entrega)
 
         self.ong_kg_dia[(ong.ong_id, t_entrega.date())] += cad["peso_kg"]
+        extra["pedido_atendido"] = self._atender_pedido(ong.ong_id, categoria, t_entrega, cad["peso_kg"])
         self._evento(lote_id, t_entrega, "ENTREGA", ator_t, f"ong:{ong.ong_id}")
         return base | extra | {
             "status_final": "ENTREGUE", "descartado": False, "motivo_descarte": None, "ts_entrega": t_entrega,

@@ -11,6 +11,7 @@ import pandas as pd
 
 from src.data import parametros as P
 from src.data.curadoria_ipvs import DIR_REF
+from src.regras.logistica import categorias_suportadas
 
 GRAUS_POR_METRO = 1 / 111_000
 
@@ -63,6 +64,8 @@ def gerar_doadores(rng: np.random.Generator, setores: pd.DataFrame) -> pd.DataFr
 
     doadores = pd.concat(partes, ignore_index=True)
     doadores.insert(0, "doador_id", [f"D-{i:04d}" for i in range(1, len(doadores) + 1)])
+    # v2.0: o doador declara se pode entregar (regras 6.6).
+    doadores["pode_entregar"] = rng.random(len(doadores)) < doadores["segmento"].map(P.DOADOR_PROB_PODE_ENTREGAR)
     # Heterogeneidade: alguns doadores doam bem mais que outros.
     # Lognormal com média 1 (mu = -sigma²/2) para não inflar o volume total.
     doadores["fator_frequencia"] = rng.lognormal(-0.5**2 / 2, 0.5, len(doadores)).round(3)
@@ -92,6 +95,24 @@ def gerar_ongs(rng: np.random.Generator, setores: pd.DataFrame) -> pd.DataFrame:
             escolhidos = ["almoco"]
         turnos.append("|".join(escolhidos))
     ongs["turnos"] = turnos
+
+    # v2.0: capacidades declaradas, janela de recebimento e categorias aceitas (regras 6.4).
+    serve = ongs["serve_refeicao"].to_numpy()
+    ongs["tem_cozinha"] = rng.random(n) < np.where(serve, P.ONG_PROB_COZINHA[True], P.ONG_PROB_COZINHA[False])
+    ongs["distribui_cestas"] = rng.random(n) < np.where(serve, P.ONG_PROB_CESTAS[True], P.ONG_PROB_CESTAS[False])
+    ongs["tem_freezer"] = ongs["tem_refrigeracao"] & (rng.random(n) < P.ONG_PROB_FREEZER_SE_REFRIGERACAO)
+    ongs["pode_buscar"] = rng.random(n) < P.ONG_PROB_VEICULO
+    janelas, pesos = zip(*P.ONG_JANELAS)
+    escolhidas = [janelas[i] for i in rng.choice(len(janelas), size=n, p=np.array(pesos) / sum(pesos))]
+    ongs["abertura_h"] = [float(j[0]) for j in escolhidas]
+    ongs["fechamento_h"] = [float(P.ONG_FECHAMENTO_NOTURNO if "noturno" in t else j[1])
+                            for j, t in zip(escolhidas, ongs["turnos"])]
+    aceitas = []
+    for ong in ongs.itertuples():
+        suportadas = sorted(categorias_suportadas(bool(ong.tem_refrigeracao), bool(ong.tem_freezer)))
+        lista = [c for c in suportadas if rng.random() >= P.ONG_PROB_RECUSAR_CATEGORIA] or suportadas
+        aceitas.append("|".join(lista))
+    ongs["categorias_aceitas"] = aceitas
     ongs["documento_hash"] = ongs["ong_id"].map(_hash_documento)
     return ongs
 
