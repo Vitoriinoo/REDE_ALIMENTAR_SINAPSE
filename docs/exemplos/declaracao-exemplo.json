@@ -1,0 +1,68 @@
+{
+ "conteudo": {
+  "alimento": {
+   "armazenamento_confirmado": "refrigerado",
+   "base_do_calculo_da_validade": {
+    "preparo": "2026-10-05T23:55:18Z"
+   },
+   "categoria_confirmada": "preparado",
+   "descricao": "30 marmitas de arroz, feijão e frango feitas hoje no almoço. Dúvidas: ligar [TELEFONE]",
+   "peso_kg": 12.5,
+   "rota_expressa": false,
+   "validade_efetiva": "2026-10-08T23:55:18Z"
+  },
+  "declaracao_id": "3e1e66a7-232b-460f-9ebe-7e32ad847f5f",
+  "doador": {
+   "pseudonimo": "doador:7693c3d08ea3f246",
+   "tipo": "PJ"
+  },
+  "emitida_em": "2026-10-06T02:55:18Z",
+  "hash_versao_anterior": null,
+  "lote_id": "L-000001",
+  "motivos_bloqueio": [],
+  "questionario": {
+   "Q1": {
+    "pergunta": "Origem do alimento",
+    "resposta": "excedente_producao"
+   },
+   "Q2": {
+    "pergunta": "A embalagem ou o recipiente está íntegro (sem furo, estufamento, vazamento ou violação)?",
+    "resposta": true
+   },
+   "Q3": {
+    "pergunta": "Contém alergênicos?",
+    "resposta": [
+     "gluten",
+     "leite"
+    ]
+   },
+   "Q4": {
+    "pergunta": "Precisa ser cozido ou preparado antes de consumir?",
+    "resposta": false
+   },
+   "Q5": {
+    "pergunta": "Declaração de condições do alimento (Lei 14.016/2020, art. 1º)",
+    "resposta": true
+   },
+   "Q6": {
+    "pergunta": "O alimento ficou exposto ao consumidor (buffet, balcão de autosserviço, mesa)?",
+    "resposta": false
+   }
+  },
+  "resultado": "ACEITA",
+  "schema": "1.0",
+  "sugestao_ia": {
+   "categoria": "preparado",
+   "confianca": 0.97,
+   "modelo": "nlp-similaridade-v1"
+  },
+  "texto_declaracao": "Declaro que o alimento doado está dentro do prazo de validade e mantém sua integridade, segurança sanitária e propriedades nutricionais, nos termos do art. 1º da Lei 14.016/2020, e que as respostas deste questionário são verdadeiras.",
+  "tipo": "DECLARACAO_DE_DOACAO",
+  "versao": 1,
+  "versao_regras": "2.0"
+ },
+ "sha256": "c27b49595237817efdc159b33da3b41ba4049dbede7642ea6e6eb7f1b915cddc",
+ "assinatura": "bmcMqCT+r3dEzBT3tJxP2gVJE8LtoAj9i7+iWKb8uCj0oPF4IXkZAZKgxxyW6svnW+gmHIpY8HxAGhSfjvcYXRHLBeg4udD/ZAx9jJ85QkNi/IONnAwQpkpSr7w+TYzcM7uXwt1n1elfaJzxxnSa6Y0xDSKqOGDsUXdjKLCN030Yu4VCD2zI2t07iZn3kLBYNMUdadcyGsOE26E2jK9oeNnHq0H33fqef2VGXB2545bjG8POAnDF0lzpFMGYARG7+8vgvAXtbR+7xt2EtxfwfAlING/9G8B9Uh5C2dqUdqdOERRX6ervYA4mcnOjpRzOVgWXIIyQjjtQGOgZYO+631AFrPwE4Qu4aIVxyImXOwv076PtwcGVF5fuIBNNSVIalxJyO058qZVCQ/heKHeM2Yw+AVrigPvWiuCYr8p1XBHFNMq0G0XpcumfPX79Qhvn6FVWSqIXGRBsHlcsRsbIGtF/rv4QzIrlDO/qmV1cddpNj//rZb61Wa3C4DE6vkiS",
+ "algoritmo": "RSA-PSS-SHA256",
+ "chave_id": "b6c8fb4d198d56d6"
+}

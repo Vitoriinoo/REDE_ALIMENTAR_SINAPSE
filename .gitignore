@@ -10,6 +10,13 @@ __pycache__/
 .env
 *.pem
 *.key
+segredos/
+# ...exceto a chave PÚBLICA do exemplo (serve para qualquer um verificar a declaração)
+!docs/exemplos/chave-publica-exemplo.pem
+
+# Dados de execução (logs auditáveis, declarações, estado dos interruptores da IA):
+# vão para o banco/volume em produção, nunca para o Git
+var/
 
 # Artefatos gerados (modelos treinados e dados brutos grandes)
 models/*.joblib
