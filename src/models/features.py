@@ -32,8 +32,12 @@ M2_CATEGORICAS = ["categoria", "armazenamento", "tipo_doador", "segmento", "regi
 M2_NUMERICAS = [
     "horas_restantes", "peso_kg", "hora", "dia_semana",
     "n_ongs_compativeis_10km", "dist_ong_top_km", "n_transportadores_ativos_raio",
+    "min_ate_receber_top",  # v2.0: trajeto + espera da janela da ONG mais bem ranqueada
 ]
-M2_BOOLEANAS = ["rota_expressa", "doador_tem_refrigeracao", "fim_de_semana", "feriado", "refrigerado_disponivel"]
+M2_BOOLEANAS = [
+    "rota_expressa", "doador_tem_refrigeracao", "fim_de_semana", "feriado", "refrigerado_disponivel",
+    "doador_pode_entregar", "requer_preparo",  # v2.0: declarados no cadastro / questionário
+]
 M2_ALVO = "descartado"
 
 # Colunas que NUNCA podem ser feature (desfecho ou latente). Checadas no treino.
@@ -43,6 +47,8 @@ PROIBIDAS = {
     "acionou_pago", "custo_caixa", "aprovacao_caixa", "caixa_aprovado", "ts_coleta", "ts_entrega",
     "minutos_trajeto", "refeicoes", "orientado_refrigerar", "refrigerado_apos_orientacao",
     "prioridade_operacional", "chuva", "prioridade_regra",
+    # v2.0: desfecho do matching/entrega
+    "complementaridade", "ong_tinha_pedido", "minutos_espera_janela", "pedido_atendido",
 }
 
 
