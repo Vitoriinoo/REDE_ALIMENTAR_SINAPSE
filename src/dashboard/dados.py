@@ -1,0 +1,112 @@
+"""Dados do dashboard: visões agregadas do Supabase ou, sem banco, o dataset simulado.
+
+Com `REDE_ALIMENTA_DASHBOARD_DB_URL`, o dashboard conecta com o papel `rede_dashboard`, que só
+enxerga as visões `rede.vw_*` (db/schema.sql): agregados, sem identificador de pessoa. Sem a
+variável, calcula os mesmos agregados a partir de `data/processed/` (mesma forma de tabela).
+"""
+
+from __future__ import annotations
+
+import json
+import os
+
+import pandas as pd
+
+from src.data.curadoria_ipvs import RAIZ
+
+DADOS = RAIZ / "data" / "processed"
+URL = os.environ.get("REDE_ALIMENTA_DASHBOARD_DB_URL")
+
+
+def fonte() -> str:
+    return "Supabase (visões agregadas)" if URL else "Dataset simulado (arquivos)"
+
+
+def _sql(consulta: str) -> pd.DataFrame:
+    import psycopg
+
+    with psycopg.connect(URL, connect_timeout=5) as c:
+        cur = c.execute(consulta)
+        cols = [d.name for d in cur.description]
+        df = pd.DataFrame(cur.fetchall(), columns=cols)
+    for col in df.columns:  # NUMERIC chega como Decimal
+        if df[col].dtype == object:
+            try:
+                df[col] = pd.to_numeric(df[col])
+            except (ValueError, TypeError):
+                pass
+    return df
+
+
+def _lotes() -> pd.DataFrame:
+    l = pd.read_csv(DADOS / "lotes.csv", low_memory=False,
+                    usecols=["lote_id", "doador_id", "regiao", "ts_cadastro", "categoria", "peso_kg", "prioridade",
+                             "minutos_ate_match", "ong_id", "status_final", "refeicoes", "motivo_descarte",
+                             "modo_logistico"])
+    l["ts_cadastro"] = pd.to_datetime(l["ts_cadastro"])
+    return l
+
+
+def impacto_regiao() -> pd.DataFrame:
+    if URL:
+        return _sql("SELECT * FROM rede.vw_impacto_regiao")
+    r = pd.read_csv(RAIZ / "data" / "reference" / "regioes.csv")
+    l = _lotes()
+    o = pd.read_csv(DADOS / "ongs.csv", usecols=["ong_id", "regiao"]).rename(columns={"regiao": "regiao_ong"})
+    ent = l[l.status_final == "ENTREGUE"].merge(o, on="ong_id")  # destino: onde a comida chegou
+    agg = pd.DataFrame({
+        "lotes": l.groupby("regiao").size(),  # origem: região do doador
+        "entregues": ent.groupby("regiao_ong").size(),
+        "descartados": l[l.status_final == "DESCARTADO"].groupby("regiao").size(),
+        "kg_salvos": ent.groupby("regiao_ong")["peso_kg"].sum(),
+        "refeicoes": ent.groupby("regiao_ong")["refeicoes"].sum(),
+    }).fillna(0).reset_index(names="regiao")
+    return r[["regiao", "municipio", "lat", "lon", "indice_vulnerabilidade"]].merge(agg, on="regiao", how="left").fillna(0)
+
+
+def mensal() -> pd.DataFrame:
+    if URL:
+        df = _sql("SELECT * FROM rede.vw_impacto_mensal ORDER BY mes")
+        df["mes"] = pd.to_datetime(df["mes"])
+        return df
+    l = _lotes()
+    l["mes"] = l["ts_cadastro"].dt.to_period("M").dt.to_timestamp()
+    aceitos = l[l.status_final.isin(["ENTREGUE", "DESCARTADO"])]
+    g = aceitos.groupby("mes")
+    return pd.DataFrame({
+        "lotes_aceitos": g.size(), "descartados": g.apply(lambda x: (x.status_final == "DESCARTADO").sum()),
+        "kg_salvos": g.apply(lambda x: x.loc[x.status_final == "ENTREGUE", "peso_kg"].sum()),
+        "refeicoes": g.apply(lambda x: x.loc[x.status_final == "ENTREGUE", "refeicoes"].sum()),
+        "mediana_match_min": g["minutos_ate_match"].median(), "media_match_min": g["minutos_ate_match"].mean(),
+    }).reset_index().assign(origem="simulacao")
+
+
+def match_prioridade() -> pd.DataFrame:
+    if URL:
+        return _sql("SELECT * FROM rede.vw_match_prioridade")
+    l = _lotes().dropna(subset=["minutos_ate_match"])
+    g = l.groupby("prioridade")["minutos_ate_match"]
+    return pd.DataFrame({"matches": g.size(), "mediana_min": g.median(), "media_min": g.mean()}).reset_index()
+
+
+def calor() -> pd.DataFrame:
+    if URL:
+        return _sql("SELECT * FROM rede.vw_calor_entregas")
+    l = _lotes()
+    o = pd.read_csv(DADOS / "ongs.csv", usecols=["ong_id", "lat", "lon"])
+    e = l[l.status_final == "ENTREGUE"].merge(o, on="ong_id")
+    e["lat"], e["lon"] = e["lat"].round(2), e["lon"].round(2)
+    return e.groupby(["lat", "lon"], as_index=False)[["peso_kg", "refeicoes"]].sum().rename(
+        columns={"peso_kg": "kg_salvos"})
+
+
+def recentes() -> pd.DataFrame:
+    if URL:
+        return _sql("SELECT * FROM rede.vw_lotes_recentes")
+    return pd.DataFrame(columns=["codigo", "regiao", "categoria", "peso_kg", "prioridade", "status_final",
+                                 "ts_cadastro"])
+
+
+def relatorio(nome: str) -> dict | None:
+    caminho = RAIZ / "reports" / nome
+    return json.loads(caminho.read_text(encoding="utf-8")) if caminho.exists() else None
