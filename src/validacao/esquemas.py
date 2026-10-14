@@ -23,6 +23,7 @@ from src.regras.cadastro import PESO_MAXIMO_KG, PESO_MINIMO_KG
 from src.regras.dominio import CADEIA_FRIA, Armazenamento, Categoria, TipoDoador, Turno
 from src.regras.logistica import PEDIDO_VALIDADE_MAXIMA, categorias_suportadas
 from src.regras.questionario import Alergenico, Origem, Respostas
+from src.seguranca.guardrails import filtrar_entrada
 from src.validacao.documentos import cnpj_valido, cpf_valido, normalizar
 
 # --- Limites (regras 4.6) ------------------------------------------------------------------
@@ -30,11 +31,14 @@ TOLERANCIA_RELOGIO = timedelta(minutes=5)
 PREPARO_MAXIMO_ATRAS = timedelta(hours=72)
 SAIDA_REFRIGERACAO_MAXIMA_ATRAS = timedelta(hours=24)
 VALIDADE_MAXIMA_A_FRENTE = timedelta(days=730)
+DISPONIVEL_ATE_MAXIMO = timedelta(days=7)
 # Caixa geográfica do recorte (RMSP, 8 municípios) com margem de ~5 km.
 LAT_MIN, LAT_MAX = -24.05, -23.25
 LON_MIN, LON_MAX = -46.90, -46.20
 
-_CONTROLE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f​-‏ -‮⁠-⁤﻿]")
+# Escapes ASCII de propósito: caractere bidirecional literal no código é ataque "Trojan Source"
+# (CVE-2021-42574; Bandit B613). O regex continua barrando os mesmos invisíveis.
+_CONTROLE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f\u200b-\u200f\u2028-\u202e\u2060-\u2064\ufeff]")
 
 ARMAZENAMENTOS_PERMITIDOS: dict[Categoria, frozenset[Armazenamento]] = {
     Categoria.PREPARADO: frozenset({Armazenamento.REFRIGERADO, Armazenamento.AMBIENTE}),
@@ -46,6 +50,14 @@ ARMAZENAMENTOS_PERMITIDOS: dict[Categoria, frozenset[Armazenamento]] = {
 def _sem_controle(texto: str) -> str:
     if _CONTROLE.search(texto):
         raise ValueError("contém caracteres de controle ou invisíveis")
+    return texto
+
+
+def _guardrail(texto: str) -> str:
+    """Texto que OUTRAS pessoas vão ler (ex.: mural de pedidos, regras 6.5) passa pelo guardrail:
+    bloqueado = rejeitado. A mensagem não ecoa o texto nem o padrão encontrado."""
+    if texto and filtrar_entrada(texto).bloqueado:
+        raise ValueError("texto recusado pelo filtro de conteúdo")
     return texto
 
 
@@ -100,6 +112,9 @@ class CadastroLote(Entrada):
     validade_rotulo: Data | None = None
     saida_refrigeracao: Data | None = None
     validade_informada: Data | None = None
+    # v2.1: até quando o lote pode SAIR do doador (ex.: o restaurante fecha às 23 h). Sem ele, vale
+    # a janela declarada no cadastro do doador (disponibilidade mútua, regras 6.1).
+    disponivel_ate: Data | None = None
     questionario: RespostasQuestionario
 
 
@@ -136,6 +151,8 @@ class CadastroLote(Entrada):
             valor = getattr(self, campo)
             if valor is not None and valor > agora + VALIDADE_MAXIMA_A_FRENTE:
                 raise ValueError(f"{campo} acima de 2 anos à frente")
+        if self.disponivel_ate is not None and not (agora < self.disponivel_ate <= agora + DISPONIVEL_ATE_MAXIMO):
+            raise ValueError("disponível até deve estar entre agora e 7 dias à frente")
         return self
 
 
@@ -153,7 +170,11 @@ class _Contato(Entrada):
 class CadastroDoador(_Contato):
     tipo: _enum(TipoDoador)
     documento: Annotated[str, Field(min_length=11, max_length=18)]
-    pode_entregar: bool
+    pode_entregar: bool  # capacidade: tem como levar
+    aceita_coleta: bool = True  # restrição (v2.1): False = "só entrega", não aceita ser coletado
+    raio_entrega_km: Annotated[float, Field(ge=0, le=20, allow_inf_nan=False)] = 0.0
+    abertura_h: Hora  # v2.1: janela em que o lote pode SAIR do doador (disponibilidade mútua)
+    fechamento_h: Hora
     tem_refrigeracao: bool
     aceita_aviso_de_pedidos: bool = False
 
@@ -162,6 +183,12 @@ class CadastroDoador(_Contato):
         valido = cpf_valido(self.documento) if self.tipo == TipoDoador.PF else cnpj_valido(self.documento)
         if not valido:
             raise ValueError("documento inválido para o tipo de doador (dígito verificador)")
+        if not self.aceita_coleta and not self.pode_entregar:
+            raise ValueError("quem não aceita coleta precisa poder entregar (senão o lote nunca sai)")
+        if self.pode_entregar != (self.raio_entrega_km > 0):
+            raise ValueError("raio de entrega incoerente com 'pode entregar'")
+        if self.abertura_h >= self.fechamento_h:
+            raise ValueError("a janela do doador deve abrir antes de fechar")
         return self
 
     @property
@@ -177,7 +204,8 @@ class CadastroOng(_Contato):
     tem_freezer: bool
     tem_cozinha: bool
     distribui_cestas: bool
-    pode_buscar: bool
+    pode_buscar: bool  # capacidade: tem veículo
+    aceita_receber_entrega: bool = True  # restrição (v2.1): False = "só busca"
     abertura_h: Hora
     fechamento_h: Hora
     turnos: Annotated[frozenset[_enum(Turno)], Field(strict=False, max_length=len(Turno))] = frozenset()
@@ -189,6 +217,8 @@ class CadastroOng(_Contato):
             raise ValueError("CNPJ inválido (dígito verificador)")
         if self.abertura_h >= self.fechamento_h:
             raise ValueError("a janela de recebimento deve abrir antes de fechar")
+        if not self.aceita_receber_entrega and not self.pode_buscar:
+            raise ValueError("quem não recebe entrega precisa poder buscar (senão nada chega)")
         if self.tem_freezer and not self.tem_refrigeracao:
             raise ValueError("freezer exige declarar refrigeração")
         if self.capacidade_refrigerada_kg > self.capacidade_kg_dia:
@@ -204,7 +234,8 @@ class PedidoOng(Entrada):
     categoria: _enum(Categoria)
     kg: Annotated[float, Field(gt=0, le=10_000, allow_inf_nan=False)]
     validade_dias: Annotated[int, Field(ge=1, le=PEDIDO_VALIDADE_MAXIMA.days)]
-    observacao: Annotated[str, Field(max_length=200), AfterValidator(_sem_controle)] = ""
+    # Vai para o mural (outras pessoas leem): passa pelo guardrail, como diz a regra 6.5.
+    observacao: Annotated[str, Field(max_length=200), AfterValidator(_sem_controle), AfterValidator(_guardrail)] = ""
 
 
 class RespostaOferta(Entrada):

@@ -1,8 +1,8 @@
 {
-  "treinado_em": "2026-10-05T23:43:58",
+  "treinado_em": "2026-10-14T08:59:21",
   "sklearn": "1.9.1",
   "dataset": "lotes.csv",
-  "sha256_dataset": "92099ce72a0dd732ada45e5b43345d59b3369242325a3505640b94a5c0483de2",
+  "sha256_dataset": "d16331b502cf104cdcbeb5607d38bd1392f2c4de1b7b56e5388affe53579bad7",
   "split": {
     "inicio_validacao": "2026-03-01",
     "inicio_teste": "2026-06-01"
@@ -23,41 +23,43 @@
     "dist_ong_top_km",
     "n_transportadores_ativos_raio",
     "min_ate_receber_top",
+    "n_ongs_impasse",
     "rota_expressa",
     "doador_tem_refrigeracao",
     "fim_de_semana",
     "feriado",
     "refrigerado_disponivel",
     "doador_pode_entregar",
-    "requer_preparo"
+    "requer_preparo",
+    "doador_aceita_coleta"
   ],
-  "limiar": 0.2613,
+  "limiar": 0.2665,
   "metricas_teste": {
     "modelo": "random_forest",
-    "limiar": 0.2613,
-    "acuracia": 0.6807,
-    "precisao": 0.2799,
-    "recall": 0.8339,
-    "f1": 0.4192,
-    "roc_auc": 0.8356,
-    "pr_auc": 0.5542,
+    "limiar": 0.2665,
+    "acuracia": 0.723,
+    "precisao": 0.3662,
+    "recall": 0.8705,
+    "f1": 0.5156,
+    "roc_auc": 0.8679,
+    "pr_auc": 0.6506,
     "heuristica_v0_no_teste": {
-      "acuracia": 0.8291,
-      "precisao": 0.4016,
-      "recall": 0.4846,
-      "f1": 0.4392,
-      "roc_auc": 0.6844,
-      "pr_auc": 0.2658
+      "acuracia": 0.8174,
+      "precisao": 0.455,
+      "recall": 0.397,
+      "f1": 0.424,
+      "roc_auc": 0.65,
+      "pr_auc": 0.2827
     },
     "ingenuo_no_teste": {
-      "acuracia": 0.8619,
+      "acuracia": 0.8307,
       "precisao": 0.0,
       "recall": 0.0,
       "f1": 0.0,
       "roc_auc": null,
-      "pr_auc": 0.1381
+      "pr_auc": 0.1693
     },
-    "taxa_descarte_teste": 0.1381,
+    "taxa_descarte_teste": 0.1693,
     "matriz_confusao": {
       "ordem": [
         "salvo",
@@ -65,16 +67,16 @@
       ],
       "valores": [
         [
-          3328,
-          1744
+          3202,
+          1419
         ],
         [
-          135,
-          678
+          122,
+          820
         ]
       ]
     }
   },
   "artefato": "modelo_descarte.joblib",
-  "sha256_artefato": "a5310b5f6bd7913cb48c1f75a241aebbc18ed4c669e3b494bf40c7688fef3edf"
+  "sha256_artefato": "86570bb2cbbbf57eaa7ec41ae05b5f549a98059e40ebe7c3c345abab4ded16f0"
 }

@@ -6,6 +6,7 @@ possa revisar e calibrar sem mexer no código de simulação. As regras de negó
 """
 
 from datetime import date
+from decimal import Decimal
 
 from src.regras.dominio import Categoria as C
 
@@ -122,6 +123,9 @@ ONG_PROB_COZINHA = {True: 0.85, False: 0.15}  # chave = serve_refeicao
 ONG_PROB_CESTAS = {True: 0.30, False: 1.00}
 ONG_PROB_FREEZER_SE_REFRIGERACAO = 0.60
 ONG_PROB_VEICULO = 0.35  # pode buscar o lote no doador (regras 6.6)
+# v2.1: RESTRIÇÃO, não capacidade. ONG que "só busca" (não recebe entrega no local). Premissa do
+# grupo (sem fonte pública): 15%. Essas ONGs têm veículo por definição.
+ONG_PROB_SO_BUSCA = 0.15
 ONG_PROB_RECUSAR_CATEGORIA = 0.10  # preferência: a ONG tira da lista algo que a estrutura comportaria
 # Janela de recebimento (abertura, fechamento) e peso; ONG com turno noturno recebe até 23 h.
 ONG_JANELAS = [((7, 21), 0.40), ((8, 18), 0.35), ((9, 17), 0.15), ((13, 22), 0.10)]
@@ -161,14 +165,18 @@ PROB_DOADOR_ENTREGA_DISPONIVEL = 0.60
 DOADOR_PROB_PODE_ENTREGAR = {
     "restaurante": 0.25, "mercado": 0.35, "padaria": 0.20, "hortifruti": 0.40, "industria": 0.50, "pf": 0.60,
 }
+# v2.1: doador que "só entrega" (não aceita ser coletado). Premissa do grupo: 15%; esses doadores
+# têm transporte por definição.
+DOADOR_PROB_SO_ENTREGA = 0.15
 DOADOR_ENTREGA_DIST_MAX_KM = 6.0
 CHEGADA_ATE_DOADOR_MIN = (8, 35)
 ATRASO_HUB_MIN = (20, 60)
 
 APP_PROB_DISPONIVEL = 0.92
 APP_PROB_DISPONIVEL_CHUVA = 0.70
-APP_TARIFA_BASE = 8.0
-APP_TARIFA_POR_KM = 2.2
+# Dinheiro em Decimal (regras 9): o caixa compara somas com teto.
+APP_TARIFA_BASE = Decimal("8.00")
+APP_TARIFA_POR_KM = Decimal("2.20")
 APP_CHEGADA_MIN = (8, 22)
 ONG_CONFIRMA_CAIXA_MIN = (2, 10)
 GESTOR_APROVA_MIN = (10, 60)

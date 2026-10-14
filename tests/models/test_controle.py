@@ -48,7 +48,7 @@ def _m2_entradas(**kw):
             "dia_semana": 2, "n_ongs_compativeis_10km": 4, "dist_ong_top_km": 3.0, "n_transportadores_ativos_raio": 6,
             "min_ate_receber_top": 15.0, "rota_expressa": False, "doador_tem_refrigeracao": True,
             "fim_de_semana": False, "feriado": False, "refrigerado_disponivel": True, "doador_pode_entregar": False,
-            "requer_preparo": False} | kw
+            "requer_preparo": False, "doador_aceita_coleta": True, "n_ongs_impasse": 0} | kw
 
 
 def test_piso_de_seguranca_o_modelo_nao_baixa_um_caso_critico(tmp_path):

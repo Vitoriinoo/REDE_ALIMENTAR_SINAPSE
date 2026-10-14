@@ -33,10 +33,12 @@ M2_NUMERICAS = [
     "horas_restantes", "peso_kg", "hora", "dia_semana",
     "n_ongs_compativeis_10km", "dist_ong_top_km", "n_transportadores_ativos_raio",
     "min_ate_receber_top",  # v2.0: trajeto + espera da janela da ONG mais bem ranqueada
+    "n_ongs_impasse",  # v2.1: ONGs barradas por impasse busca x entrega
 ]
 M2_BOOLEANAS = [
     "rota_expressa", "doador_tem_refrigeracao", "fim_de_semana", "feriado", "refrigerado_disponivel",
     "doador_pode_entregar", "requer_preparo",  # v2.0: declarados no cadastro / questionário
+    "doador_aceita_coleta",  # v2.1: restrição "só entrega"
 ]
 M2_ALVO = "descartado"
 
@@ -49,6 +51,8 @@ PROIBIDAS = {
     "prioridade_operacional", "chuva", "prioridade_regra",
     # v2.0: desfecho do matching/entrega
     "complementaridade", "ong_tinha_pedido", "minutos_espera_janela", "pedido_atendido",
+    # v2.1
+    "modo_logistico", "excecao_redundante", "minutos_espera_doador",
 }
 
 

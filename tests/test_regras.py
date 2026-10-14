@@ -1,6 +1,7 @@
 """Testes das regras de negócio (docs/regras-de-negocio.md). Cada teste cita a seção que protege."""
 
 from datetime import datetime, timedelta
+from decimal import Decimal
 
 import pytest
 
@@ -26,6 +27,13 @@ from src.regras.logistica import (
     tempo_ate_receber,
     transporte_elegivel,
     validar_pedido,
+)
+from src.regras.logistica import (
+    ModoLogistico,
+    aplicar_regra_redundante,
+    modo_logistico,
+    reais,
+    saida_possivel,
 )
 from src.regras.prioridade import prioridade_por_regra
 from src.regras.refeicoes import refeicoes
@@ -236,9 +244,18 @@ def test_pago_exige_espera_estourada_e_risco_alto():
 
 # --- 9 Caixa solidário (segregação de funções) -----------------------------------------------------
 def test_ate_o_teto_a_ong_confirma_acima_o_gestor_aprova():
-    assert aprovacao_necessaria(35.0, gasto_do_dia_da_ong=0) == Aprovacao.CONFIRMACAO_ONG
-    assert aprovacao_necessaria(45.0, gasto_do_dia_da_ong=0) == Aprovacao.GESTOR_CAIXA
-    assert aprovacao_necessaria(35.0, gasto_do_dia_da_ong=180) == Aprovacao.GESTOR_CAIXA  # teto diário R$ 200
+    assert aprovacao_necessaria(Decimal("35.00"), gasto_do_dia_da_ong=Decimal("0")) == Aprovacao.CONFIRMACAO_ONG
+    assert aprovacao_necessaria(Decimal("45.00"), gasto_do_dia_da_ong=Decimal("0")) == Aprovacao.GESTOR_CAIXA
+    assert aprovacao_necessaria("35.00", gasto_do_dia_da_ong="180.00") == Aprovacao.GESTOR_CAIXA  # teto diário R$ 200
+
+
+def test_dinheiro_nao_aceita_float():
+    """Em float, 0,1 + 0,2 != 0,3: a soma do dia poderia passar ou não do teto por arredondamento."""
+    with pytest.raises(TypeError):
+        aprovacao_necessaria(35.0, gasto_do_dia_da_ong=Decimal("0"))
+    # Exatamente no teto do dia (199,90 + 0,10 = 200,00) a ONG ainda confirma sozinha.
+    assert aprovacao_necessaria(Decimal("0.10"), Decimal("199.90")) == Aprovacao.CONFIRMACAO_ONG
+    assert reais("10.005") == Decimal("10.01")
 
 
 # --- 7.5 Orientação de refrigeração -----------------------------------------------------------------
@@ -259,3 +276,62 @@ def test_preparado_usa_420g_por_refeicao():
 
 def test_hortifruti_rende_menos_refeicoes_por_kg_que_graos():
     assert refeicoes(C.HORTIFRUTI, 1) < refeicoes(C.NAO_PERECIVEL, 1)
+
+
+# --- 6.6 Impasse busca x entrega e par redundante (v2.1) ---------------------------------------------
+def _modo(doador_entrega=False, aceita_coleta=True, ong_busca=False, ong_recebe=True, hub=False):
+    return modo_logistico(doador_entrega, aceita_coleta, ong_busca, ong_recebe, hub)
+
+
+def test_doador_so_entrega_com_ong_so_busca_e_impasse_bloqueado():
+    """Checklist: o algoritmo IMPEDE o match entre quem só entrega e quem só busca."""
+    assert _modo(doador_entrega=True, aceita_coleta=False, ong_busca=True, ong_recebe=False) == ModoLogistico.IMPASSE
+
+
+def test_impasse_vira_ponto_de_encontro_no_hub():
+    assert _modo(doador_entrega=True, aceita_coleta=False, ong_busca=True, ong_recebe=False, hub=True)         == ModoLogistico.VIA_HUB
+
+
+def test_doador_so_entrega_longe_vai_ao_hub_e_terceiro_leva_a_ong():
+    """v2.1 (2026-10-14): do hub, qualquer transporte da cascata leva à ONG que recebe entrega."""
+    assert _modo(doador_entrega=False, aceita_coleta=False, ong_busca=False, ong_recebe=True, hub=True)         == ModoLogistico.VIA_HUB
+    assert _modo(doador_entrega=False, aceita_coleta=False, ong_busca=False, ong_recebe=True) == ModoLogistico.IMPASSE
+
+
+def test_restricao_de_um_lado_so_tem_saida_direta():
+    assert _modo(doador_entrega=True, aceita_coleta=False) == ModoLogistico.DIRETO  # ONG recebe a entrega
+    assert _modo(ong_busca=True, ong_recebe=False) == ModoLogistico.DIRETO  # ONG busca, doador aceita coleta
+    assert _modo() == ModoLogistico.DIRETO  # terceiro (voluntário, motorista) coleta e entrega
+
+
+def test_doador_que_so_entrega_fora_do_alcance_nao_resolve():
+    """'Pode entregar' é por ONG: fora do raio de entrega, o doador que só entrega fica em impasse."""
+    assert _modo(doador_entrega=False, aceita_coleta=False, ong_busca=True, ong_recebe=False) == ModoLogistico.IMPASSE
+
+
+def test_redundante_e_proibido_quando_ha_alternativa():
+    cands = [{"id": 1, "c": "redundante"}, {"id": 2, "c": "complementar"}, {"id": 3, "c": "sem_transporte"}]
+    permitidos, excecao = aplicar_regra_redundante(cands, lambda x: x["c"])
+    assert [c["id"] for c in permitidos] == [2, 3] and not excecao
+
+
+def test_redundante_sem_alternativa_e_excecao_registravel():
+    permitidos, excecao = aplicar_regra_redundante([{"id": 1, "c": "redundante"}], lambda x: x["c"])
+    assert [c["id"] for c in permitidos] == [1] and excecao
+    assert aplicar_regra_redundante([], lambda x: x["c"]) == ([], False)
+
+
+# --- 6.1 Disponibilidade MÚTUA: janela do doador (v2.1) ------------------------------------------------
+def test_restaurante_que_fecha_antes_da_coleta_empurra_a_saida():
+    """Cadastro 22h50, restaurante fecha 23h: com 30 min de antecedência, a coleta só sai amanhã às 11h."""
+    cadastro = datetime(2026, 10, 8, 22, 50)
+    assert saida_possivel(cadastro, (11, 23)) == datetime(2026, 10, 9, 11, 0)
+    sem_janela = tempo_ate_receber(cadastro, m(20), 0, 24)  # ONG que recebe a qualquer hora
+    com_janela = tempo_ate_receber(cadastro, m(20), 0, 24, janela_doador=(11, 23))
+    assert sem_janela == m(50) and com_janela > h(12)
+
+
+def test_disponivel_ate_impede_coleta_que_nao_acontece():
+    cadastro = datetime(2026, 10, 8, 22, 50)
+    assert saida_possivel(cadastro, (11, 23.5), disponivel_ate=datetime(2026, 10, 8, 23, 30)) is not None
+    assert saida_possivel(cadastro, (11, 23.5), disponivel_ate=datetime(2026, 10, 8, 23, 0)) is None

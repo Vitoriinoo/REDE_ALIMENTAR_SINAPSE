@@ -11,6 +11,8 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 
+from decimal import Decimal
+
 import numpy as np
 import pandas as pd
 
@@ -22,14 +24,20 @@ from src.regras.logistica import (
     MAX_RECUSAS_ANTES_DE_ESCALAR,
     PRAZO_ACEITE_ONG,
     RAIO_MAXIMO_KM,
+    ATRASO_ESTIMADO_HUB,
+    RAIO_DOADOR_ATE_HUB_KM,
     Aprovacao,
+    ModoLogistico,
     PerfilOng,
+    aplicar_regra_redundante,
     aprovacao_necessaria,
     complementaridade,
+    modo_logistico,
     motivo_incompatibilidade,
     pode_acionar_pago,
     pode_doar,
     proxima_abertura,
+    reais,
     score_ong,
     tempo_ate_receber,
     trajeto_maximo,
@@ -87,7 +95,7 @@ class Simulador:
     pedidos: pd.DataFrame | None = None
     eventos: list[dict] = field(default_factory=list)
     ong_kg_dia: dict = field(default_factory=lambda: defaultdict(float))
-    caixa_dia: dict = field(default_factory=lambda: defaultdict(float))
+    caixa_dia: dict = field(default_factory=lambda: defaultdict(Decimal))
 
     def __post_init__(self):
         self.ongs_ok = self.ongs[self.ongs["status_aprovacao"] == "aprovada"].reset_index(drop=True)
@@ -97,6 +105,7 @@ class Simulador:
                 tem_refrigeracao=bool(o.tem_refrigeracao), tem_freezer=bool(o.tem_freezer),
                 tem_cozinha=bool(o.tem_cozinha), distribui_cestas=bool(o.distribui_cestas),
                 pode_buscar=bool(o.pode_buscar), abertura_h=float(o.abertura_h), fechamento_h=float(o.fechamento_h),
+                aceita_receber_entrega=bool(o.aceita_receber_entrega),
             )
             for o in self.ongs_ok.itertuples()
         ]
@@ -264,19 +273,38 @@ class Simulador:
         dist = distancia_km(doador.lat, doador.lon, o["lat"].to_numpy(), o["lon"].to_numpy())
         limite_consumo = cad["validade_efetiva"] - timedelta(hours=P.MARGEM_CONSUMO_HORAS[categoria])
         dia = ts.date()
+        janela_doador = (float(doador.abertura_h), float(doador.fechamento_h))
+        hub = self._hub_mais_proximo_info(doador)
+        # O doador consegue levar até o hub (a rota expressa é porta a porta e não usa hub).
+        hub_viavel = bool(doador.pode_entregar) and hub[1] <= RAIO_DOADOR_ATE_HUB_KM and not cad["rota_expressa"]
         candidatos = []
+        self._n_impasse = 0
         for i, ong in enumerate(o.itertuples()):
             perfil = self.perfis[i]
             if dist[i] > RAIO_MAXIMO_KM:
                 continue
             if motivo_incompatibilidade(categoria, armazenamento, cad["requer_preparo"], perfil) is not None:
                 continue
+            # Impasse busca x entrega (6.6, v2.1): bloqueado, a não ser que o hub sirva de ponto de encontro.
+            # "Pode entregar" é capacidade + ALCANCE: o doador PJ leva até ~6 km (PF leva ao hub).
+            alcanca = bool(doador.pode_entregar) and (
+                dist[i] <= P.DOADOR_ENTREGA_DIST_MAX_KM or doador.tipo_doador == TipoDoador.PF)
+            modo = modo_logistico(alcanca, bool(doador.aceita_coleta), perfil.pode_buscar,
+                                  perfil.aceita_receber_entrega, hub_viavel)
+            if modo == ModoLogistico.IMPASSE:
+                self._n_impasse += 1
+                continue
             usado = self.ong_kg_dia[(ong.ong_id, dia)]
             if usado + cad["peso_kg"] > ong.capacidade_kg_dia:
                 continue
             a_tempo = self._turno_a_tempo(ong.turnos, ts, limite_consumo)
-            trajeto = timedelta(minutes=self._minutos_trajeto(dist[i], "carro", ts, False, estimada=True))
-            ate_receber = tempo_ate_receber(ts, trajeto, perfil.abertura_h, perfil.fechamento_h)
+            km_rota = float(dist[i]) if modo == ModoLogistico.DIRETO else hub[1] + self._km_hub_ong(hub[0], ong)
+            trajeto = timedelta(minutes=self._minutos_trajeto(km_rota, "carro", ts, False, estimada=True))
+            if modo == ModoLogistico.VIA_HUB:
+                trajeto += ATRASO_ESTIMADO_HUB
+            # Disponibilidade MÚTUA (6.1, v2.1): sai na janela do doador, chega na janela da ONG.
+            ate_receber = tempo_ate_receber(ts, trajeto, perfil.abertura_h, perfil.fechamento_h,
+                                            janela_doador=janela_doador)
             if ts + ate_receber > limite_consumo:  # disponibilidade: não consegue receber a tempo
                 continue
             if cad["rota_expressa"]:
@@ -284,13 +312,17 @@ class Simulador:
                 if not a_tempo or not transporte_elegivel(categoria, armazenamento, False, trajeto_moto):
                     continue
             livre = 1 - usado / ong.capacidade_kg_dia
-            comp = complementaridade(bool(doador.pode_entregar), perfil.pode_buscar)
+            comp = complementaridade(alcanca, perfil.pode_buscar)
             pedido = self._pedido_aberto(ong.ong_id, categoria, ts) is not None
             candidatos.append({
                 "score": score_ong(ate_receber, livre, int(ong.ipvs_grupo), a_tempo, comp, pedido), "i": i,
                 "km": float(dist[i]), "usado": usado, "min_receber": ate_receber / MIN,
-                "complementaridade": str(comp), "pedido": pedido,
+                "complementaridade": str(comp), "pedido": pedido, "modo": str(modo),
             })
+        # Par redundante: proibido se houver alternativa; sem alternativa, permitido como EXCEÇÃO (6.6).
+        candidatos, excecao = aplicar_regra_redundante(candidatos, lambda c: c["complementaridade"])
+        for c in candidatos:
+            c["excecao_redundante"] = excecao
         candidatos.sort(key=lambda c: c["score"], reverse=True)
         return candidatos
 
@@ -331,30 +363,48 @@ class Simulador:
         return None, t, n_ofertas, True
 
     # ---------- transporte ----------
-    def _candidatos_gratuitos(self, doador, ong, km: float, categoria, armazenamento, peso: float, ts: datetime, chuva: bool):
+    def _candidatos_gratuitos(self, doador, ong, km: float, categoria, armazenamento, peso: float, ts: datetime,
+                              chuva: bool, modo: str = "direto"):
         """Lista (modalidade, veiculo, refrigerado, transportador_id, prob_aceite, tempo_medio_min)."""
         cand = []
         tipo = TipoDoador(doador.tipo_doador)
-        # v2.0: só entrega/busca quem DECLAROU ter transporte (regras 6.6).
-        if doador.pode_entregar and (km <= P.DOADOR_ENTREGA_DIST_MAX_KM or tipo == TipoDoador.PF):
-            cand.append((Modalidade.DOADOR_ENTREGA, "carro", False, None, P.PROB_DOADOR_ENTREGA_DISPONIVEL, 10.0))
-        if ong.pode_buscar:
-            cand.append((Modalidade.ONG_RETIRA, "carro", False, None, P.PROB_ONG_RETIRA_DISPONIVEL, 12.0))
+        via_hub = modo == ModoLogistico.VIA_HUB
+        # Na rota via hub, o doador precisa estar disponível para levar até lá (multiplica tudo).
+        p_doador = P.PROB_DOADOR_ENTREGA_DISPONIVEL if via_hub else 1.0
+        if via_hub:
+            # Impasse resolvido no hub: o doador leva; a ONG busca lá OU um terceiro leva do hub até ela.
+            if ong.pode_buscar:
+                cand.append((Modalidade.PONTO_ENCONTRO_HUB, "carro", False, None,
+                             p_doador * P.PROB_ONG_RETIRA_DISPONIVEL, 20.0))
+        else:
+            # v2.0: só entrega/busca quem DECLAROU ter transporte; v2.1: e só se o outro lado ACEITA.
+            if doador.pode_entregar and ong.aceita_receber_entrega and (
+                    km <= P.DOADOR_ENTREGA_DIST_MAX_KM or tipo == TipoDoador.PF):
+                cand.append((Modalidade.DOADOR_ENTREGA, "carro", False, None, P.PROB_DOADOR_ENTREGA_DISPONIVEL, 10.0))
+            if ong.pode_buscar and doador.aceita_coleta:
+                cand.append((Modalidade.ONG_RETIRA, "carro", False, None, P.PROB_ONG_RETIRA_DISPONIVEL, 12.0))
 
-        t = self.transportadores.iloc[self.ativos[ts.date()]]
+        # Terceiro coleta no doador (se ele aceita) ou no hub (via hub); a ONG precisa receber entrega.
+        terceiros = ong.aceita_receber_entrega and (via_hub or doador.aceita_coleta)
+        t = self.transportadores.iloc[self.ativos[ts.date()]] if terceiros else self.transportadores.iloc[[]]
+        if via_hub:
+            h = self.hubs.set_index("hub_id").loc[self._hub_mais_proximo(doador)]
+            origem_lat, origem_lon = float(h.lat), float(h.lon)
+        else:
+            origem_lat, origem_lon = doador.lat, doador.lon
         if len(t):
-            d_base = distancia_km(doador.lat, doador.lon, t["lat"].to_numpy(), t["lon"].to_numpy())
+            d_base = distancia_km(origem_lat, origem_lon, t["lat"].to_numpy(), t["lon"].to_numpy())
             e_tra = (t["modalidade"] == "transportadora").to_numpy()
             perto = np.zeros(len(t), dtype=bool)
             perto[~e_tra] = d_base[~e_tra] <= P.RAIO_TRANSPORTADOR_KM
             if e_tra.any():
                 tr = t[e_tra]
                 args = (tr["lat"].to_numpy(), tr["lon"].to_numpy(), tr["rota_b_lat"].to_numpy(), tr["rota_b_lon"].to_numpy())
-                d_doador = distancia_ponto_segmento_km(doador.lat, doador.lon, *args)
+                d_doador = distancia_ponto_segmento_km(origem_lat, origem_lon, *args)
                 d_ong = distancia_ponto_segmento_km(ong.lat, ong.lon, *args)
                 perto[e_tra] = (d_doador <= P.DESVIO_MAX_ROTA_KM) & (d_ong <= P.DESVIO_MAX_ROTA_KM)
             for tr in t[perto & (t["capacidade_kg"].to_numpy() >= peso)].itertuples():
-                p = P.PROB_ACEITE_GRATUITO
+                p = P.PROB_ACEITE_GRATUITO * p_doador
                 if chuva and tr.modalidade != "transportadora":
                     p *= P.CHUVA_MULT_DISPONIBILIDADE
                 cand.append((Modalidade(tr.modalidade), tr.veiculo, bool(tr.refrigerado), tr.transportador_id,
@@ -368,8 +418,16 @@ class Simulador:
         return elegiveis
 
     def _hub_mais_proximo(self, doador) -> str:
+        return self._hub_mais_proximo_info(doador)[0]
+
+    def _hub_mais_proximo_info(self, doador) -> tuple[str, float]:
         d = distancia_km(doador.lat, doador.lon, self.hubs["lat"].to_numpy(), self.hubs["lon"].to_numpy())
-        return str(self.hubs.iloc[int(np.argmin(d))].hub_id)
+        i = int(np.argmin(d))
+        return str(self.hubs.iloc[i].hub_id), float(d[i])
+
+    def _km_hub_ong(self, hub_id: str, ong) -> float:
+        h = self.hubs.set_index("hub_id").loc[hub_id]
+        return float(distancia_km(h.lat, h.lon, ong.lat, ong.lon))
 
     # ---------- processo completo ----------
     def _proxima_rodada(self, t: datetime) -> datetime:
@@ -384,13 +442,15 @@ class Simulador:
     def _tentar_pago(self, lote_id, ong, km, categoria, armazenamento, prioridade, t_decisao, espera, limite, chuva, extra):
         """Aciona o entregador de app se a regra permitir. Devolve o horário de aceite ou None."""
         rng = self.rng
+        if extra.get("modo_logistico") == ModoLogistico.VIA_HUB:
+            return None  # no ponto de encontro não há terceiro: doador e ONG levam e buscam
         estimado = self._minutos_trajeto(km, "moto", t_decisao, chuva, estimada=True)
         risco_alto = (limite - t_decisao) < timedelta(hours=P.HEURISTICA_RISCO_HORAS)
         if not (pode_acionar_pago(prioridade, espera, risco_alto)
                 and transporte_elegivel(categoria, armazenamento, False, timedelta(minutes=estimado))):
             return None
         self._evento(lote_id, t_decisao, "ACIONA_PAGO", "sistema", "heuristica_risco_v0")
-        custo = round(P.APP_TARIFA_BASE + P.APP_TARIFA_POR_KM * km, 2)
+        custo = reais(P.APP_TARIFA_BASE + P.APP_TARIFA_POR_KM * reais(str(round(km, 2))))
         chave = (ong.ong_id, t_decisao.date())
         aprovacao = aprovacao_necessaria(custo, self.caixa_dia[chave])
         if aprovacao == Aprovacao.CONFIRMACAO_ONG:
@@ -399,7 +459,7 @@ class Simulador:
         else:
             t_aprov = t_decisao + timedelta(minutes=float(rng.uniform(*P.GESTOR_APROVA_MIN)))
             aprovado, ator = bool(rng.random() < P.GESTOR_PROB_APROVA), "gestor_caixa"
-        self._evento(lote_id, t_aprov, "APROVACAO_CAIXA" if aprovado else "CAIXA_NEGADO", ator, f"R${custo:.2f}")
+        self._evento(lote_id, t_aprov, "APROVACAO_CAIXA" if aprovado else "CAIXA_NEGADO", ator, f"R${custo}")
         extra |= {"custo_caixa": custo, "aprovacao_caixa": str(aprovacao), "caixa_aprovado": aprovado}
         disponivel = rng.random() < (P.APP_PROB_DISPONIVEL_CHUVA if chuva else P.APP_PROB_DISPONIVEL)
         if not (aprovado and disponivel):
@@ -417,7 +477,8 @@ class Simulador:
             "lote_id": lote_id, "doador_id": doador.doador_id, "tipo_doador": doador.tipo_doador,
             "segmento": doador.segmento, "regiao": doador.regiao, "ts_cadastro": ts,
         }
-        assert pode_doar(TipoDoador(doador.tipo_doador), categoria)
+        if not pode_doar(TipoDoador(doador.tipo_doador), categoria):  # invariante (sem assert: Bandit B101)
+            raise RuntimeError(f"categoria {categoria} sorteada para doador que não pode doá-la")
         cad = self._cadastro(doador, categoria, ts)
         armazenamento = Armazenamento(cad["armazenamento"])
         base |= cad
@@ -450,6 +511,8 @@ class Simulador:
             "dist_ong_top_km": round(ranking[0]["km"], 2) if ranking else None,
             "min_ate_receber_top": round(ranking[0]["min_receber"], 1) if ranking else None,
             "doador_pode_entregar": bool(doador.pode_entregar),
+            "doador_aceita_coleta": bool(doador.aceita_coleta),
+            "n_ongs_impasse": int(self._n_impasse),
             "n_transportadores_ativos_raio": int(perto.sum()),
             "refrigerado_disponivel": bool(t_at["refrigerado"].to_numpy()[perto].any()) if len(t_at) else False,
             "doador_tem_refrigeracao": bool(doador.tem_refrigeracao),
@@ -510,12 +573,22 @@ class Simulador:
         escolhida = next((c for c in ranking if c["i"] == idx), None)
         extra |= {"ong_id": ong.ong_id, "ts_aceite_ong": t_aceite, "minutos_ate_match": round((t_aceite - ts) / MIN, 1),
                   "complementaridade": escolhida["complementaridade"] if escolhida else None,
-                  "ong_tinha_pedido": escolhida["pedido"] if escolhida else None}
+                  "ong_tinha_pedido": escolhida["pedido"] if escolhida else None,
+                  "modo_logistico": escolhida["modo"] if escolhida else ModoLogistico.DIRETO.value,
+                  "excecao_redundante": bool(escolhida and escolhida["excecao_redundante"])}
+        if extra["excecao_redundante"]:
+            self._evento(lote_id, t_aceite, "EXCECAO_REDUNDANTE", "sistema",
+                         "par redundante aceito: nenhuma alternativa viável (regras 6.6)")
         if t_aceite >= limite:
             return descarte("VENCEU_AGUARDANDO_ONG", t_aceite)
 
         # --- Transporte em rodadas: gratuitos primeiro; pago só com espera estourada + risco alto ---
-        km = float(distancia_km(doador.lat, doador.lon, ong.lat, ong.lon))
+        modo = extra["modo_logistico"]
+        if modo == ModoLogistico.VIA_HUB:
+            hub_ponto, km_hub = self._hub_mais_proximo_info(doador)
+            km = km_hub + self._km_hub_ong(hub_ponto, ong)
+        else:
+            km = float(distancia_km(doador.lat, doador.lon, ong.lat, ong.lon))
         espera = ESPERA_TRANSPORTE_GRATUITO[prioridade]
         janela = timedelta(minutes=P.JANELA_RODADA_TRANSPORTE_MIN)
         t, escolha, t_transp, pago = t_aceite, None, None, False
@@ -524,7 +597,8 @@ class Simulador:
             chuva = self._chuva(t)
             self._evento(lote_id, t, "OFERTA_TRANSPORTE", "sistema", f"{km:.1f}km rodada={extra['rodadas_transporte']}")
             vencedor, t_gratis = None, None
-            for c in self._candidatos_gratuitos(doador, ong, km, categoria, armazenamento, cad["peso_kg"], t, chuva):
+            for c in self._candidatos_gratuitos(doador, ong, km, categoria, armazenamento, cad["peso_kg"], t, chuva,
+                                                modo):
                 if rng.random() < c[4]:
                     t_c = t + timedelta(minutes=float(rng.exponential(c[5])))
                     if t_c - t <= janela and (t_gratis is None or t_c < t_gratis):
@@ -533,7 +607,8 @@ class Simulador:
             if vencedor is not None and (espera is None or t_gratis - t <= espera):
                 escolha, t_transp = vencedor, t_gratis
                 break
-            if espera is not None and "custo_caixa" not in extra:
+            terceiros = doador.aceita_coleta and ong.aceita_receber_entrega and modo != ModoLogistico.VIA_HUB
+            if espera is not None and terceiros and "custo_caixa" not in extra:
                 t_aprov = self._tentar_pago(lote_id, ong, km, categoria, armazenamento, prioridade,
                                             t + espera, espera, limite, chuva, extra)
                 if t_aprov is not None and (t_gratis is None or t_aprov < t_gratis):
@@ -552,23 +627,25 @@ class Simulador:
         self._evento(lote_id, t_transp, "ACEITE_TRANSPORTE", ator_t, str(modalidade))
         chuva = self._chuva(t_transp)
 
-        usa_hub = not estado["rota_expressa"] and (
+        usa_hub = modalidade == Modalidade.PONTO_ENCONTRO_HUB or modo == ModoLogistico.VIA_HUB or (not estado["rota_expressa"] and (
             (TipoDoador(doador.tipo_doador) == TipoDoador.PF)
             or (modalidade in (Modalidade.MOTORISTA_RETORNO, Modalidade.TRANSPORTADORA) and rng.random() < 0.25)
-        )
+        ))
         hub_id = self._hub_mais_proximo(doador) if usa_hub else None
 
-        if modalidade == Modalidade.DOADOR_ENTREGA:
+        if modalidade in (Modalidade.DOADOR_ENTREGA, Modalidade.PONTO_ENCONTRO_HUB):
             chegada = 0.0
         elif modalidade == Modalidade.APP_ENTREGA:
             chegada = rng.uniform(*P.APP_CHEGADA_MIN)
         else:
             chegada = rng.uniform(*P.CHEGADA_ATE_DOADOR_MIN) * (1.25 if chuva else 1.0)
-        t_coleta = t_transp + timedelta(minutes=float(chegada))
+        # Disponibilidade mútua (6.1, v2.1): o lote só sai do doador dentro da janela do doador.
+        t_coleta = proxima_abertura(t_transp + timedelta(minutes=float(chegada)),
+                                    float(doador.abertura_h), float(doador.fechamento_h))
         self._evento(lote_id, t_coleta, "COLETA", ator_t, hub_id or "porta_a_porta")
 
         minutos = self._minutos_trajeto(km, veiculo, t_coleta, chuva, estimada=False)
-        if hub_id:
+        if hub_id:  # parada no hub (no ponto de encontro: doador e ONG se desencontram no tempo)
             minutos += rng.uniform(*P.ATRASO_HUB_MIN)
         # A ONG só recebe dentro da janela declarada (regras 6.4): fora dela, o lote espera.
         t_chegada = t_coleta + timedelta(minutes=float(minutos))
@@ -577,6 +654,7 @@ class Simulador:
             "modalidade": str(modalidade), "transportador_id": transp_id, "hub_id": hub_id, "acionou_pago": pago,
             "ts_coleta": t_coleta, "minutos_trajeto": round(minutos, 1),
             "minutos_espera_janela": round((t_entrega - t_chegada) / MIN, 1),
+            "minutos_espera_doador": round((t_coleta - t_transp - timedelta(minutes=float(chegada))) / MIN, 1),
         }
 
         limite_trajeto = trajeto_maximo(categoria, armazenamento, refrigerado)

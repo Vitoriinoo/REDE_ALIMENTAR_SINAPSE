@@ -33,7 +33,7 @@ from src.regras.questionario import PERGUNTAS, TEXTO_DECLARACAO, perguntas_aplic
 from src.seguranca.minimizacao import mascarar_texto
 
 VERSAO_SCHEMA = "1.0"
-VERSAO_REGRAS = "2.0"
+VERSAO_REGRAS = "2.1"
 ALGORITMO = "RSA-PSS-SHA256"
 TAMANHO_CHAVE = 3072
 

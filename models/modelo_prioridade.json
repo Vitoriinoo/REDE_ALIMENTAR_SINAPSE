@@ -1,8 +1,8 @@
 {
-  "treinado_em": "2026-10-05T23:43:58",
+  "treinado_em": "2026-10-14T08:59:21",
   "sklearn": "1.9.1",
   "dataset": "lotes.csv",
-  "sha256_dataset": "92099ce72a0dd732ada45e5b43345d59b3369242325a3505640b94a5c0483de2",
+  "sha256_dataset": "d16331b502cf104cdcbeb5607d38bd1392f2c4de1b7b56e5388affe53579bad7",
   "split": {
     "inicio_validacao": "2026-03-01",
     "inicio_teste": "2026-06-01"
@@ -18,17 +18,17 @@
   ],
   "metricas_teste": {
     "modelo": "random_forest",
-    "acuracia": 0.9276,
-    "f1_macro": 0.9278,
-    "recall_critica": 0.9517,
+    "acuracia": 0.9195,
+    "f1_macro": 0.919,
+    "recall_critica": 0.9434,
     "regra_no_teste": {
-      "acuracia": 0.9288,
-      "f1_macro": 0.929,
-      "recall_critica": 0.9517
+      "acuracia": 0.9209,
+      "f1_macro": 0.9204,
+      "recall_critica": 0.9441
     },
     "ingenuo_no_teste": {
-      "acuracia": 0.2841,
-      "f1_macro": 0.1106,
+      "acuracia": 0.2939,
+      "f1_macro": 0.1136,
       "recall_critica": 0.0
     },
     "matriz_confusao": {
@@ -40,32 +40,32 @@
       ],
       "valores": [
         [
-          1477,
-          75,
+          1317,
+          79,
           0,
           0
         ],
         [
-          44,
-          1555,
+          59,
+          1565,
+          66,
+          0
+        ],
+        [
+          0,
+          84,
+          1464,
+          87
+        ],
+        [
+          0,
+          0,
           73,
-          0
-        ],
-        [
-          0,
-          83,
-          1526,
-          71
-        ],
-        [
-          0,
-          0,
-          80,
-          901
+          769
         ]
       ]
     }
   },
   "artefato": "modelo_prioridade.joblib",
-  "sha256_artefato": "510348ec119e9498a6306303014a0bb329bc8c188c763f0df15f44d0a173932d"
+  "sha256_artefato": "28d0729846b5a36a5cd138907022f0d832f6aa14edb952fc9dbd0a6d29042716"
 }

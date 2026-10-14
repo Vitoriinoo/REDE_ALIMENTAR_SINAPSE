@@ -66,6 +66,13 @@ def gerar_doadores(rng: np.random.Generator, setores: pd.DataFrame) -> pd.DataFr
     doadores.insert(0, "doador_id", [f"D-{i:04d}" for i in range(1, len(doadores) + 1)])
     # v2.0: o doador declara se pode entregar (regras 6.6).
     doadores["pode_entregar"] = rng.random(len(doadores)) < doadores["segmento"].map(P.DOADOR_PROB_PODE_ENTREGAR)
+    # v2.1: restrição separada da capacidade. Quem "só entrega" não aceita coleta e, logo, tem transporte.
+    so_entrega = rng.random(len(doadores)) < P.DOADOR_PROB_SO_ENTREGA
+    doadores["aceita_coleta"] = ~so_entrega
+    doadores.loc[so_entrega, "pode_entregar"] = True
+    # v2.1: janela do doador (disponibilidade mútua, regras 6.1): o lote só sai nesse horário.
+    doadores["abertura_h"] = doadores["segmento"].map(lambda s: float(P.FUNCIONAMENTO[s][0]))
+    doadores["fechamento_h"] = doadores["segmento"].map(lambda s: float(P.FUNCIONAMENTO[s][1]))
     # Heterogeneidade: alguns doadores doam bem mais que outros.
     # Lognormal com média 1 (mu = -sigma²/2) para não inflar o volume total.
     doadores["fator_frequencia"] = rng.lognormal(-0.5**2 / 2, 0.5, len(doadores)).round(3)
@@ -102,6 +109,10 @@ def gerar_ongs(rng: np.random.Generator, setores: pd.DataFrame) -> pd.DataFrame:
     ongs["distribui_cestas"] = rng.random(n) < np.where(serve, P.ONG_PROB_CESTAS[True], P.ONG_PROB_CESTAS[False])
     ongs["tem_freezer"] = ongs["tem_refrigeracao"] & (rng.random(n) < P.ONG_PROB_FREEZER_SE_REFRIGERACAO)
     ongs["pode_buscar"] = rng.random(n) < P.ONG_PROB_VEICULO
+    # v2.1: ONG que "só busca" (não recebe entrega no local); tem veículo por definição.
+    so_busca = rng.random(n) < P.ONG_PROB_SO_BUSCA
+    ongs["aceita_receber_entrega"] = ~so_busca
+    ongs.loc[so_busca, "pode_buscar"] = True
     janelas, pesos = zip(*P.ONG_JANELAS)
     escolhidas = [janelas[i] for i in rng.choice(len(janelas), size=n, p=np.array(pesos) / sum(pesos))]
     ongs["abertura_h"] = [float(j[0]) for j in escolhidas]

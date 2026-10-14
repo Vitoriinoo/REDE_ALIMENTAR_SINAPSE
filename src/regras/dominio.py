@@ -37,6 +37,7 @@ class Modalidade(StrEnum):
     MOTORISTA_RETORNO = "motorista_retorno"
     TRANSPORTADORA = "transportadora"
     APP_ENTREGA = "app_entrega"  # única modalidade paga (caixa solidário)
+    PONTO_ENCONTRO_HUB = "ponto_encontro_hub"  # v2.1: doador leva ao hub e a ONG busca lá (impasse)
 
 
 class Turno(StrEnum):

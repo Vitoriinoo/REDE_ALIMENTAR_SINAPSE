@@ -27,7 +27,7 @@ from pathlib import Path
 from src.seguranca.minimizacao import mascarar_texto, minimizar
 from src.seguranca.segredos import obter_segredo
 
-VERSAO_REGRAS = "2.0"
+VERSAO_REGRAS = "2.1"
 GENESE = "0" * 64
 
 

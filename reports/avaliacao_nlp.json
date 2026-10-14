@@ -1,15 +1,15 @@
 {
   "guardrail": {
     "v1": {
-      "dataset_adversariais_bloqueados": "388/388",
-      "dataset_falsos_positivos": "0/24657",
+      "dataset_adversariais_bloqueados": "362/362",
+      "dataset_falsos_positivos": "0/23773",
       "ineditos_A_bloqueados": "2/10",
       "ineditos_B_bloqueados": "3/10",
       "benignos_falsos_positivos": "1/10"
     },
     "v2": {
-      "dataset_adversariais_bloqueados": "388/388",
-      "dataset_falsos_positivos": "0/24657",
+      "dataset_adversariais_bloqueados": "362/362",
+      "dataset_falsos_positivos": "0/23773",
       "ineditos_A_bloqueados": "10/10",
       "ineditos_B_bloqueados": "4/10",
       "benignos_falsos_positivos": "0/10"
@@ -29,17 +29,17 @@
     "revisao": "e8f8c211226b894fcb81acc59f3b34ba3efd5f42",
     "teste_dataset": {
       "amostra": 300,
-      "acuracia_categoria": 0.7533,
+      "acuracia_categoria": 0.8033,
       "acuracia_por_categoria": {
         "congelado": 1.0,
-        "hortifruti": 0.84,
-        "nao_perecivel": 0.74,
-        "padaria": 0.8,
-        "preparado": 0.68,
-        "refrigerado": 0.46
+        "hortifruti": 0.86,
+        "nao_perecivel": 0.52,
+        "padaria": 0.86,
+        "preparado": 0.92,
+        "refrigerado": 0.66
       },
-      "acuracia_armazenamento_cadeia_fria": 0.74,
-      "segundos_por_texto": 0.0044,
+      "acuracia_armazenamento_cadeia_fria": 0.7533,
+      "segundos_por_texto": 0.0066,
       "matriz_confusao": {
         "ordem": [
           "preparado",
@@ -51,20 +51,20 @@
         ],
         "valores": [
           [
-            34,
+            46,
             2,
-            5,
-            0,
             1,
-            8
+            0,
+            0,
+            1
           ],
           [
-            1,
-            23,
-            13,
-            0,
             2,
-            11
+            33,
+            8,
+            0,
+            0,
+            7
           ],
           [
             0,
@@ -75,71 +75,71 @@
             0
           ],
           [
-            3,
-            1,
+            5,
+            2,
             0,
-            42,
+            43,
             0,
-            4
+            0
           ],
           [
             0,
+            1,
             0,
-            0,
-            7,
-            40,
+            3,
+            43,
             3
           ],
           [
-            8,
+            16,
+            2,
             0,
             0,
-            0,
-            5,
-            37
+            6,
+            26
           ]
         ]
       },
       "exemplos_de_erro": [
         {
-          "descricao_texto": "Sobrou 9 maços de alface, vence em breve",
+          "descricao_texto": "Excedente do dia: 31 maços de alface",
           "categoria": "hortifruti",
           "previsto": "preparado"
         },
         {
-          "descricao_texto": "130 maços de alface, vence em breve",
-          "categoria": "hortifruti",
-          "previsto": "preparado"
-        },
-        {
-          "descricao_texto": "16 sacos de batata em ótimo estado hoje ainda",
-          "categoria": "hortifruti",
-          "previsto": "nao_perecivel"
-        },
-        {
-          "descricao_texto": "Doação: 43 maços de alface. Retirar, validade próxima",
+          "descricao_texto": "34 maços de alface hoje ainda",
           "categoria": "hortifruti",
           "previsto": "refrigerado"
         },
         {
-          "descricao_texto": "Sobrou 51 sacos de batata, vence em breve",
+          "descricao_texto": "31 maços de alface",
           "categoria": "hortifruti",
-          "previsto": "nao_perecivel"
+          "previsto": "refrigerado"
         },
         {
-          "descricao_texto": "Doação: 69 maços de alface. Retirar hoje ainda",
-          "categoria": "hortifruti",
-          "previsto": "nao_perecivel"
-        },
-        {
-          "descricao_texto": "9 maços de alface, vence em breve",
+          "descricao_texto": "Excedente do dia: 8 maços de alface hoje ainda",
           "categoria": "hortifruti",
           "previsto": "preparado"
         },
         {
-          "descricao_texto": "15 sacos de batata, validade próxima",
+          "descricao_texto": "19 maços de alface hoje ainda",
           "categoria": "hortifruti",
-          "previsto": "nao_perecivel"
+          "previsto": "preparado"
+        },
+        {
+          "descricao_texto": "20 maços de alface em ótimo estado hoje ainda",
+          "categoria": "hortifruti",
+          "previsto": "preparado"
+        },
+        {
+          "descricao_texto": "Excedente do dia: 15 maços de alface hoje ainda",
+          "categoria": "hortifruti",
+          "previsto": "preparado"
+        },
+        {
+          "descricao_texto": "9 pacotes de macarrão",
+          "categoria": "nao_perecivel",
+          "previsto": "preparado"
         }
       ]
     },
@@ -151,17 +151,17 @@
     "revisao": "8adb042d524ecd5c26d3e3ba0e3fbcf7e2d0864c",
     "teste_dataset": {
       "amostra": 300,
-      "acuracia_categoria": 0.5,
+      "acuracia_categoria": 0.4967,
       "acuracia_por_categoria": {
         "congelado": 0.8,
         "hortifruti": 1.0,
-        "nao_perecivel": 0.0,
-        "padaria": 0.98,
-        "preparado": 0.04,
-        "refrigerado": 0.18
+        "nao_perecivel": 0.02,
+        "padaria": 1.0,
+        "preparado": 0.0,
+        "refrigerado": 0.16
       },
-      "acuracia_armazenamento_cadeia_fria": 0.5067,
-      "segundos_por_texto": 3.7794,
+      "acuracia_armazenamento_cadeia_fria": 0.52,
+      "segundos_por_texto": 5.6519,
       "matriz_confusao": {
         "ordem": [
           "preparado",
@@ -173,26 +173,26 @@
         ],
         "valores": [
           [
-            2,
             0,
-            3,
-            24,
-            21,
-            0
-          ],
-          [
-            1,
-            9,
-            1,
+            0,
+            6,
+            18,
             26,
-            13,
             0
           ],
           [
-            3,
+            2,
+            8,
+            2,
+            26,
+            12,
+            0
+          ],
+          [
+            0,
             0,
             40,
-            7,
+            10,
             0,
             0
           ],
@@ -208,58 +208,58 @@
             0,
             0,
             0,
-            1,
-            49,
+            0,
+            50,
             0
           ],
           [
             1,
             0,
-            1,
-            27,
-            21,
-            0
+            3,
+            25,
+            20,
+            1
           ]
         ]
       },
       "exemplos_de_erro": [
         {
-          "descricao_texto": "Excedente do dia: 31 peças de acém congelado, validade próxima",
+          "descricao_texto": "11 peças de acém congelado, congelado, validade próxima",
           "categoria": "congelado",
           "previsto": "hortifruti"
         },
         {
-          "descricao_texto": "22 peças de acém congelado em ótimo estado, congelado hoje ainda",
+          "descricao_texto": "Sobrou 84 peças de acém congelado, no freezer",
           "categoria": "congelado",
           "previsto": "hortifruti"
         },
         {
-          "descricao_texto": "Doação: 18 caixas de hambúrguer congelado, no freezer. Retirar",
-          "categoria": "congelado",
-          "previsto": "preparado"
-        },
-        {
-          "descricao_texto": "Excedente do dia: 83 peças de acém congelado hoje ainda",
+          "descricao_texto": "Temos 10 peças de acém congelado para doar, no freezer hoje ainda",
           "categoria": "congelado",
           "previsto": "hortifruti"
         },
         {
-          "descricao_texto": "Sobrou 50 peças de acém congelado, vence em breve, congelado",
-          "categoria": "congelado",
-          "previsto": "preparado"
-        },
-        {
-          "descricao_texto": "Excedente do dia: 7 peças de acém congelado, vence em breve",
+          "descricao_texto": "5 peças de acém congelado, no freezer, vence em breve",
           "categoria": "congelado",
           "previsto": "hortifruti"
         },
         {
-          "descricao_texto": "27 peças de acém congelado, no freezer, vence em breve",
+          "descricao_texto": "Sobrou 6 peças de acém congelado, vence em breve, congelado",
           "categoria": "congelado",
           "previsto": "hortifruti"
         },
         {
-          "descricao_texto": "Temos 2 peças de acém congelado para doar, no freezer, vence em breve",
+          "descricao_texto": "25 peças de acém congelado em ótimo estado, no freezer, validade próxima",
+          "categoria": "congelado",
+          "previsto": "hortifruti"
+        },
+        {
+          "descricao_texto": "Excedente do dia: 6 peças de acém congelado",
+          "categoria": "congelado",
+          "previsto": "hortifruti"
+        },
+        {
+          "descricao_texto": "Sobrou 14 peças de acém congelado, validade próxima, congelado",
           "categoria": "congelado",
           "previsto": "hortifruti"
         }

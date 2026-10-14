@@ -70,13 +70,14 @@ CATALOGO: dict[str, dict[str, Campo]] = {
     "data/processed/contexto_diario.csv": _todos(INT_OPER, "data dia_semana mes feriado chuva"),
     "data/processed/doadores.csv": {
         **_todos(PSEUDO_CONTRATO, "doador_id documento_hash lat lon cd_setor"),
-        **_todos(INT_OPER, "regiao municipio ipvs_grupo tipo_doador segmento tem_refrigeracao pode_entregar"),
+        **_todos(INT_OPER, "regiao municipio ipvs_grupo tipo_doador segmento tem_refrigeracao pode_entregar "
+                           "aceita_coleta abertura_h fechamento_h"),
     },
     "data/processed/ongs.csv": {
         **_todos(PSEUDO_CONTRATO, "ong_id documento_hash"),
         **_todos(INT_OPER, "cd_setor regiao municipio ipvs_grupo lat lon status_aprovacao capacidade_kg_dia "
                            "tem_refrigeracao serve_refeicao turnos tem_cozinha distribui_cestas tem_freezer "
-                           "pode_buscar abertura_h fechamento_h categorias_aceitas"),
+                           "pode_buscar abertura_h fechamento_h categorias_aceitas aceita_receber_entrega"),
     },
     "data/processed/hubs.csv": _todos(INT_OPER, "hub_id cd_setor regiao municipio ipvs_grupo lat lon tipo validado_admin"),
     "data/processed/transportadores.csv": {
@@ -94,7 +95,7 @@ CATALOGO: dict[str, dict[str, Campo]] = {
         **_todos(INT_IA, "texto_adversarial tipo_adversarial prioridade_regra prioridade hora dia_semana mes "
                          "fim_de_semana feriado n_ongs_compativeis_10km dist_ong_top_km min_ate_receber_top "
                          "doador_pode_entregar n_transportadores_ativos_raio refrigerado_disponivel "
-                         "doador_tem_refrigeracao"),
+                         "doador_tem_refrigeracao doador_aceita_coleta n_ongs_impasse"),
         **_todos(INT_OPER, "lote_id tipo_doador segmento regiao ts_cadastro categoria armazenamento peso_kg ts_preparo "
                            "validade_rotulo ts_saida_refrigeracao validade_informada validade_efetiva horas_restantes "
                            "rota_expressa requer_preparo alergenicos bloqueio_questionario n_ofertas_ong "
@@ -102,7 +103,8 @@ CATALOGO: dict[str, dict[str, Campo]] = {
                            "refrigerado_apos_orientacao ts_aceite_ong minutos_ate_match complementaridade "
                            "ong_tinha_pedido modalidade hub_id acionou_pago ts_coleta minutos_trajeto "
                            "minutos_espera_janela pedido_atendido status_final descartado motivo_descarte ts_entrega "
-                           "refeicoes prioridade_operacional custo_caixa aprovacao_caixa caixa_aprovado"),
+                           "refeicoes prioridade_operacional custo_caixa aprovacao_caixa caixa_aprovado modo_logistico "
+                           "excecao_redundante minutos_espera_doador"),
     },
     "data/processed/eventos.csv.gz": {
         "ator": PSEUDO_AUDITORIA,

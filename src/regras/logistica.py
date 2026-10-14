@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from decimal import ROUND_HALF_UP, Decimal
 from enum import StrEnum
 
 from src.regras.dominio import CADEIA_FRIA, Armazenamento, Categoria, Prioridade, TipoDoador
@@ -27,9 +28,11 @@ class PerfilOng:
     tem_freezer: bool
     tem_cozinha: bool
     distribui_cestas: bool
-    pode_buscar: bool
+    pode_buscar: bool  # CAPACIDADE: tem veículo para buscar
     abertura_h: float  # janela de recebimento, horas do dia (ex.: 8.0 -> 8:00)
     fechamento_h: float
+    # RESTRIÇÃO (v2.1): False = "só busca", não recebe entrega no local (regras 6.6).
+    aceita_receber_entrega: bool = True
 
 
 def categorias_suportadas(tem_refrigeracao: bool, tem_freezer: bool) -> frozenset[Categoria]:
@@ -89,9 +92,60 @@ ANTECEDENCIA_OPERACIONAL = timedelta(minutes=30)
 
 
 def tempo_ate_receber(agora: datetime, trajeto: timedelta, abertura_h: float, fechamento_h: float,
-                      antecedencia: timedelta = ANTECEDENCIA_OPERACIONAL) -> timedelta:
-    """max(antecedência + trajeto, espera até a janela abrir): a ONG perto que só abre amanhã perde."""
-    return proxima_abertura(agora + antecedencia + trajeto, abertura_h, fechamento_h) - agora
+                      antecedencia: timedelta = ANTECEDENCIA_OPERACIONAL,
+                      janela_doador: tuple[float, float] | None = None) -> timedelta:
+    """Disponibilidade MÚTUA (6.1, v2.1): o lote só SAI do doador dentro da janela do doador e só
+    CHEGA à ONG dentro da janela da ONG. A ONG perto que só abre amanhã perde, e o restaurante que
+    fecha antes da coleta empurra a saída para a próxima abertura dele."""
+    saida = agora + antecedencia
+    if janela_doador is not None:
+        saida = proxima_abertura(saida, *janela_doador)
+    return proxima_abertura(saida + trajeto, abertura_h, fechamento_h) - agora
+
+
+def saida_possivel(agora: datetime, janela_doador: tuple[float, float], disponivel_ate: datetime | None = None,
+                   antecedencia: timedelta = ANTECEDENCIA_OPERACIONAL) -> datetime | None:
+    """Primeiro instante em que o lote pode sair do doador; None se só depois do 'disponível até'."""
+    saida = proxima_abertura(agora + antecedencia, *janela_doador)
+    return None if disponivel_ate is not None and saida > disponivel_ate else saida
+
+
+# --- Modo logístico: impasse busca x entrega (6.6, v2.1) -------------------------------
+# Capacidade (tem veículo) e restrição (aceita ser coletado / aceita receber no local) são coisas
+# diferentes. "Doador SÓ entrega" = não aceita coleta; "ONG SÓ busca" = não recebe entrega.
+RAIO_DOADOR_ATE_HUB_KM = 6.0  # igual ao alcance de entrega do doador (simulação)
+ATRASO_ESTIMADO_HUB = timedelta(minutes=40)  # parada no hub (média de 20-60 min)
+
+
+class ModoLogistico(StrEnum):
+    DIRETO = "direto"
+    VIA_HUB = "via_hub"  # doador leva ao hub; de lá, a ONG busca OU um terceiro leva (ponto de encontro, 7.4)
+    IMPASSE = "impasse"  # ninguém consegue completar a doação: o match é BLOQUEADO
+
+
+def modo_logistico(doador_pode_entregar: bool, doador_aceita_coleta: bool, ong_pode_buscar: bool,
+                   ong_aceita_receber_entrega: bool, hub_viavel: bool) -> ModoLogistico:
+    """Existe um jeito de o alimento sair do doador e chegar à ONG?
+
+    `doador_pode_entregar` é "consegue entregar NESTA ONG": capacidade (tem veículo) + alcance
+    (raio de entrega declarado). Um doador que só entrega até 6 km não resolve uma ONG a 15 km.
+
+    Direto, se: a ONG busca e o doador aceita coleta; ou o doador entrega e a ONG recebe; ou um
+    terceiro (voluntário, motorista, transportadora) coleta e a ONG recebe. Se nada disso vale, há
+    um impasse, e a única saída é um ponto de encontro (hub). `hub_viavel` = o doador consegue levar
+    o lote até um hub (tem transporte e o hub está no alcance dele; a rota expressa é porta a porta e
+    não usa hub, 7.5). Do hub em diante, a ONG busca (se tem veículo) ou qualquer transporte da
+    cascata leva até ela (se ela recebe entrega). A restrição dos dois lados é respeitada: ninguém
+    coleta NO doador, e a ONG que "só busca" busca no hub (v2.1, decisão do grupo em 2026-10-14).
+    """
+    direto = ((ong_pode_buscar and doador_aceita_coleta)
+              or (doador_pode_entregar and ong_aceita_receber_entrega)
+              or (doador_aceita_coleta and ong_aceita_receber_entrega))
+    if direto:
+        return ModoLogistico.DIRETO
+    if hub_viavel and (ong_pode_buscar or ong_aceita_receber_entrega):
+        return ModoLogistico.VIA_HUB
+    return ModoLogistico.IMPASSE
 
 
 # --- Complementaridade busca x entrega (6.6) ----------------------------------------
@@ -112,6 +166,18 @@ def complementaridade(doador_pode_entregar: bool, ong_pode_buscar: bool) -> Comp
     if doador_pode_entregar != ong_pode_buscar:
         return Complementaridade.COMPLEMENTAR
     return Complementaridade.REDUNDANTE if doador_pode_entregar else Complementaridade.SEM_TRANSPORTE
+
+
+def aplicar_regra_redundante(candidatos: list, complementaridade_de) -> tuple[list, bool]:
+    """Par redundante (doador entrega E ONG busca) é PROIBIDO quando existe outra ONG viável;
+    só é permitido sem alternativa, e aí é EXCEÇÃO que o chamador registra no log (6.6, v2.1).
+
+    Devolve (candidatos permitidos, houve_excecao).
+    """
+    outros = [c for c in candidatos if complementaridade_de(c) != Complementaridade.REDUNDANTE]
+    if outros or not candidatos:
+        return outros, False
+    return candidatos, True
 
 
 # --- Matching Doador x ONG (6.1, 6.2) --------------------------------------------
@@ -150,7 +216,9 @@ def score_ong(
     - acesso: 1 se pode receber logo, 0 a partir de 60 min de trajeto + espera da janela;
     - vulnerabilidade: grupo IPVS do SETOR da ONG (1..6) normalizado para 0..1;
     - turno: 1 se a ONG serve refeição antes de o lote vencer, 0,5 caso contrário;
-    - complementaridade e pedido aberto: preferência forte, não proibição (6.5, 6.6). Os dois são
+    - complementaridade e pedido aberto (6.5, 6.6): o par redundante já foi barrado antes (só sobra
+      sem alternativa, `aplicar_regra_redundante`); aqui o score desempata complementar x sem
+      transporte. Os dois são
       MULTIPLICADOS pelo acesso: desempatam entre ONGs acessíveis, mas não puxam o lote para longe.
       Somados por inteiro, eles levavam o lote a ONGs com veículo mais distantes (o carro da ONG não
       é refrigerado) e o descarte simulado subia 1 p.p.; multiplicados, o custo cai para ~0,2 p.p.
@@ -222,8 +290,11 @@ def pode_acionar_pago(prioridade: Prioridade, espera: timedelta, risco_alto_de_d
 
 
 # --- Caixa solidário (9) ---------------------------------------------------------------
-TETO_POR_ENTREGA = 40.0
-TETO_DIARIO_POR_ONG = 200.0
+# Dinheiro é Decimal (no banco, NUMERIC(10,2)): em float, 0,1 + 0,2 != 0,3 e a soma do dia
+# pode passar ou não passar do teto por erro de arredondamento.
+CENTAVO = Decimal("0.01")
+TETO_POR_ENTREGA = Decimal("40.00")
+TETO_DIARIO_POR_ONG = Decimal("200.00")
 
 
 class Aprovacao(StrEnum):
@@ -231,7 +302,17 @@ class Aprovacao(StrEnum):
     GESTOR_CAIXA = "GESTOR_CAIXA"  # gestor externo à ONG (segregação de funções)
 
 
-def aprovacao_necessaria(valor: float, gasto_do_dia_da_ong: float) -> Aprovacao:
-    if valor <= TETO_POR_ENTREGA and gasto_do_dia_da_ong + valor <= TETO_DIARIO_POR_ONG:
+def reais(valor: Decimal | str | int) -> Decimal:
+    """Converte para Decimal com 2 casas. Recusa float de propósito: o erro já teria acontecido."""
+    if isinstance(valor, float):
+        raise TypeError("Valor em dinheiro não pode ser float: use Decimal ou texto (ex.: '12.50').")
+    return Decimal(valor).quantize(CENTAVO, rounding=ROUND_HALF_UP)
+
+
+def aprovacao_necessaria(valor: Decimal, gasto_do_dia_da_ong: Decimal) -> Aprovacao:
+    valor, gasto = reais(valor), reais(gasto_do_dia_da_ong)
+    if valor < 0 or gasto < 0:
+        raise ValueError("Valores do caixa não podem ser negativos.")
+    if valor <= TETO_POR_ENTREGA and gasto + valor <= TETO_DIARIO_POR_ONG:
         return Aprovacao.CONFIRMACAO_ONG
     return Aprovacao.GESTOR_CAIXA

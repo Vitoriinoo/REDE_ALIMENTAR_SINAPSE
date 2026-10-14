@@ -118,7 +118,8 @@ def main(com_nli: bool = False) -> None:
         amostra["cat_nli"] = amostra["lote_id"].map(base["cat_prevista"])
         amostra["arm_nli"] = amostra["lote_id"].map(base["arm_previsto"])
         seg_nli = None
-        assert amostra["cat_nli"].notna().all(), "amostra do baseline não confere: rode com --com-nli"
+        if not amostra["cat_nli"].notna().all():  # sem assert: Bandit B101
+            raise SystemExit("amostra do baseline não confere: rode com --com-nli")
 
     relatorio = {
         "guardrail": avaliar_guardrail(),
