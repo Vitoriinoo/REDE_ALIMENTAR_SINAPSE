@@ -21,14 +21,14 @@ WORKDIR /app
 # CVE-2026-13346 instalação arbitrária via índice malicioso). No fim de cada alvo o pip é REMOVIDO:
 # em produção ninguém instala pacote, e o que não existe não pode ser explorado.
 RUN python -m pip install --upgrade pip==26.2.0
-COPY requirements-base.txt ./
+COPY requirements/base.txt requirements/base.txt
 
 # --- inferência ----------------------------------------------------------------------------
 FROM base AS inferencia-build
-COPY requirements-ia.txt ./
+COPY requirements/ia.txt requirements/ia.txt
 # torch CPU vem do índice oficial do PyTorch (a roda do PyPI traz CUDA: +2 GB sem uso).
 RUN pip install torch==2.14.0 --index-url https://download.pytorch.org/whl/cpu \
-    && pip install -r requirements-ia.txt
+    && pip install -r requirements/ia.txt
 # O índice do PyTorch traz setuptools 78.1.0 (Trivy: CVE-2025-47273 path traversal, e wheel/jaraco
 # vendorizados com CVE ALTO): atualiza para a versão corrigida, vinda do PyPI.
 RUN pip install --upgrade setuptools==83.0.0
@@ -53,8 +53,8 @@ CMD ["uvicorn", "src.inferencia.servico:app", "--host", "0.0.0.0", "--port", "80
 
 # --- API -----------------------------------------------------------------------------------
 FROM base AS api
-COPY requirements-api.txt ./
-RUN pip install -r requirements-api.txt && python -m pip uninstall -y pip
+COPY requirements/api.txt requirements/api.txt
+RUN pip install -r requirements/api.txt && python -m pip uninstall -y pip
 COPY src/ src/
 COPY data/processed/ data/processed/
 COPY db/ db/
@@ -67,8 +67,8 @@ CMD ["uvicorn", "src.api.app:app", "--host", "0.0.0.0", "--port", "8000", "--no-
 
 # --- dashboard -----------------------------------------------------------------------------
 FROM base AS dashboard
-COPY requirements-dashboard.txt ./
-RUN pip install -r requirements-dashboard.txt && python -m pip uninstall -y pip
+COPY requirements/dashboard.txt requirements/dashboard.txt
+RUN pip install -r requirements/dashboard.txt && python -m pip uninstall -y pip
 COPY src/ src/
 COPY data/processed/lotes.csv data/processed/doadores.csv data/processed/ongs.csv data/processed/
 COPY data/reference/regioes.csv data/reference/regioes.csv
@@ -83,8 +83,8 @@ CMD ["sh", "-c", "streamlit run src/dashboard/app.py --server.port ${PORT} --ser
 
 # --- completo (HF Space da API: um container só, porta 7860) -------------------------------
 FROM inferencia-build AS completo
-COPY requirements-api.txt ./
-RUN pip install -r requirements-api.txt && python -m pip uninstall -y pip
+COPY requirements/api.txt requirements/api.txt
+RUN pip install -r requirements/api.txt && python -m pip uninstall -y pip
 COPY data/processed/ data/processed/
 COPY db/ db/
 RUN mkdir -p var && chown app:app var

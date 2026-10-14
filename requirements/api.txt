@@ -1,5 +1,5 @@
 # Container da API (sem torch: os modelos rodam no container de inferência).
--r requirements-base.txt
+-r base.txt
 fastapi==0.143.0
 uvicorn==0.54.0
 psycopg[binary]==3.3.6

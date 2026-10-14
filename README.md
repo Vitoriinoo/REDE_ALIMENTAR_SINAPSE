@@ -63,6 +63,27 @@ flowchart LR
     DASH -->|rede_dashboard: só visões| DB
 ```
 
+### Estrutura do repositório
+
+```
+rede-alimenta-ia/
+├── src/                 código (detalhe abaixo)
+├── tests/               testes automatizados (pytest)
+├── data/                processed/ = dataset simulado · reference/ = IPVS 2022 (SEADE)
+├── db/                  schema.sql: esquema relacional do Supabase
+├── docs/                regras de negócio, PRD, SDD, STRIDE, governança (LGPD), dicionário
+├── notebooks/           análise exploratória e resultados
+├── reports/             métricas dos modelos, NLP, observabilidade · sast/ = Bandit e Trivy
+├── models/              metadados dos modelos (o .joblib é gerado no treino, fora do Git)
+├── requirements/        dependências por container: base · api · ia · dashboard · dev
+├── deploy/              scripts: segredos locais, senhas do banco, publicação no Hugging Face
+├── .github/             pipeline CI/CD (workflows/) e Dependabot
+├── Dockerfile           imagens: api · inferencia · dashboard · completo
+├── docker-compose.yml   ambiente local endurecido (+ PostgreSQL local no perfil banco-local)
+├── requirements.txt     ambiente completo (inclui os de requirements/)
+└── .env.exemplo         modelo dos segredos (o .env real nunca vai para o Git)
+```
+
 ```
 src/
 ├── api/              FastAPI: rotas, autenticação/papéis, matching de lote novo, repositório, ponte com a IA
@@ -76,12 +97,6 @@ src/
 ├── governanca/       catálogo de dados (classe, base legal, retenção, dono) e qualidade de dados
 ├── db/               carga do ano simulado no banco
 └── data/             curadoria IPVS, premissas, entidades, simulação, gerador
-db/schema.sql         esquema relacional (NUMERIC, UUID, RLS, papéis, tabelas só de inclusão, visões)
-Dockerfile            alvos: api · inferencia · dashboard · completo
-docker-compose.yml    ambiente local endurecido (+ PostgreSQL local no perfil banco-local)
-.github/workflows/    pipeline DevSecOps
-deploy/               publicação nos Hugging Face Spaces
-reports/sast/         relatórios Bandit/Trivy e resumo do gate
 ```
 
 ## Como rodar
@@ -101,7 +116,7 @@ Para ter um banco local em vez do Supabase: `docker compose --profile banco-loca
 python -m venv .venv
 .venv\Scripts\activate   # Windows (Linux/macOS: source .venv/bin/activate)
 pip install torch==2.14.0 --index-url https://download.pytorch.org/whl/cpu
-pip install -r requirements-dev.txt
+pip install -r requirements/dev.txt
 
 python -m src.models.treinar               # treina e avalia os Modelos 1 e 2 (~30 s)
 uvicorn src.api.app:app --reload           # API em http://localhost:8000/docs

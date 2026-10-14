@@ -42,11 +42,11 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
-          cache-dependency-path: requirements*.txt
+          cache-dependency-path: requirements/*.txt
       - name: Instalar dependências (torch CPU)
         run: |
           pip install torch==2.14.0 --index-url https://download.pytorch.org/whl/cpu
-          pip install -r requirements-dev.txt
+          pip install -r requirements/dev.txt
       - name: Treinar os modelos a partir do dataset versionado
         run: python -m src.models.treinar > /dev/null
       - name: Testes (inclui esquema real no PostgreSQL e carga do ano simulado)
@@ -99,7 +99,7 @@ jobs:
       - name: Trivy nas dependências e no Dockerfile/Compose (configuração)
         run: |
           # O Trivy não segue "-r": achata os requirements num arquivo só (dependências diretas, fixadas).
-          mkdir -p /tmp/deps && grep -hvE '^\s*(#|-r|$)' requirements*.txt | sort -u > /tmp/deps/requirements.txt
+          mkdir -p /tmp/deps && grep -hvE '^\s*(#|-r|$)' requirements/*.txt | sort -u > /tmp/deps/requirements.txt
           docker run --rm -v /tmp/deps:/src:ro -v "$PWD/reports/sast:/out" "$TRIVY_IMAGEM"             fs --scanners vuln --ignore-unfixed --format json -o /out/trivy-dependencias.json /src
           docker run --rm -v "$PWD:/src:ro" "$TRIVY_IMAGEM" config --exit-code 1 --severity HIGH,CRITICAL /src
       - uses: actions/upload-artifact@v4

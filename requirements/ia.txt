@@ -1,6 +1,6 @@
 # Container de inferência (isolado). torch em versão CPU:
-#   pip install -r requirements-ia.txt --extra-index-url https://download.pytorch.org/whl/cpu
--r requirements-base.txt
+#   pip install -r requirements/ia.txt --extra-index-url https://download.pytorch.org/whl/cpu
+-r base.txt
 fastapi==0.143.0
 uvicorn==0.54.0
 torch==2.14.0

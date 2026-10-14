@@ -41,15 +41,15 @@ SPACES = {
     "api": {
         "nome": "rede-alimenta-api", "titulo": "Rede Alimenta IA - API", "porta": 7860, "alvo": "completo",
         "descricao": "API FastAPI (Swagger em /docs) com IA de prioridade e descarte",
-        "arquivos": ["src", "data/processed", "db", "requirements-base.txt", "requirements-api.txt",
-                     "requirements-ia.txt", ".dockerignore"],
+        "arquivos": ["src", "data/processed", "db", "requirements/base.txt", "requirements/api.txt",
+                     "requirements/ia.txt", ".dockerignore"],
     },
     "dashboard": {
         "nome": "rede-alimenta-dashboard", "titulo": "Rede Alimenta IA - Dashboard", "porta": 8501,
         "alvo": "dashboard", "descricao": "Impacto social, qualidade da IA e indicadores de segurança",
         "arquivos": ["src", "data/processed/lotes.csv", "data/processed/doadores.csv", "data/processed/ongs.csv",
-                     "data/reference/regioes.csv", "reports", ".streamlit", "requirements-base.txt",
-                     "requirements-dashboard.txt", ".dockerignore"],
+                     "data/reference/regioes.csv", "reports", ".streamlit", "requirements/base.txt",
+                     "requirements/dashboard.txt", ".dockerignore"],
     },
 }
 

@@ -1,5 +1,7 @@
-# Ambiente completo (desenvolvimento local e o Space da API, que roda API + modelos no mesmo processo).
-# torch em versão CPU: pip install -r requirements.txt --extra-index-url https://download.pytorch.org/whl/cpu
--r requirements-api.txt
--r requirements-ia.txt
--r requirements-dashboard.txt
+# Ambiente completo (desenvolvimento local e o Space da API).
+# Cada container instala só o seu arquivo em requirements/ (base, api, ia, dashboard); testes e
+# ferramentas: requirements/dev.txt. torch em versão CPU:
+#   pip install torch==2.14.0 --index-url https://download.pytorch.org/whl/cpu
+-r requirements/api.txt
+-r requirements/ia.txt
+-r requirements/dashboard.txt
