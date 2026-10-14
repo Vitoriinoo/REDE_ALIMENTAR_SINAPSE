@@ -1,0 +1,70 @@
+# Rede Alimenta IA: ambiente completo local.
+#   docker compose up --build                         API (8000) + inferência isolada + dashboard (8501)
+#   docker compose --profile banco-local up --build   + PostgreSQL local com db/schema.sql (sem Supabase)
+# Segredos: copie .env.exemplo para .env (o .env nunca vai para o Git).
+
+x-endurecido: &endurecido
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: ["no-new-privileges:true"]
+  tmpfs: ["/tmp"]
+  restart: unless-stopped
+
+services:
+  inferencia:
+    <<: *endurecido
+    build: { context: ., target: inferencia }
+    image: rede-alimenta/inferencia:local
+    # Sem env_file: o container da IA não recebe NENHUM segredo (checklist, item 8).
+    networks: [interna]          # rede interna: sem saída para a internet e sem porta publicada
+    mem_limit: 3g
+    pids_limit: 256
+
+  api:
+    <<: *endurecido
+    build: { context: ., target: api }
+    image: rede-alimenta/api:local
+    env_file: [.env]
+    environment:
+      REDE_ALIMENTA_INFERENCIA_URL: http://inferencia:8001
+      REDE_ALIMENTA_DIR_VAR: /app/var
+    volumes: ["dados-api:/app/var"]  # log auditável, declarações, interruptores (fora da imagem)
+    networks: [interna, externa]
+    ports: ["8000:8000"]
+    depends_on:
+      inferencia: { condition: service_healthy }
+    mem_limit: 512m
+    pids_limit: 256
+
+  dashboard:
+    <<: *endurecido
+    build: { context: ., target: dashboard }
+    image: rede-alimenta/dashboard:local
+    environment:
+      # Só a conexão de LEITURA (papel rede_dashboard, que só enxerga visões agregadas).
+      REDE_ALIMENTA_DASHBOARD_DB_URL: ${REDE_ALIMENTA_DASHBOARD_DB_URL:-}
+      REDE_ALIMENTA_API_PUBLICA: http://localhost:8000
+    tmpfs: ["/tmp", "/home/app"]
+    networks: [externa]
+    ports: ["8501:8501"]
+    mem_limit: 768m
+
+  postgres:
+    profiles: [banco-local]
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_SENHA_LOCAL:?defina POSTGRES_SENHA_LOCAL no .env}
+    volumes:
+      - "./db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro"
+      - "pg-dados:/var/lib/postgresql/data"
+    networks: [externa]
+    ports: ["127.0.0.1:5432:5432"]
+
+networks:
+  interna:
+    internal: true
+  externa: {}
+
+volumes:
+  dados-api: {}
+  pg-dados: {}

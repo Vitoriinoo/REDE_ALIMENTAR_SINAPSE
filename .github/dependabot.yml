@@ -1,0 +1,13 @@
+# Supply chain (STRIDE T4): PRs automáticos de atualização, que passam pelo mesmo pipeline e gate.
+version: 2
+updates:
+  - package-ecosystem: pip
+    directory: "/"
+    schedule: { interval: weekly }
+    open-pull-requests-limit: 5
+  - package-ecosystem: docker
+    directory: "/"
+    schedule: { interval: weekly }
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule: { interval: weekly }

@@ -1,0 +1,4 @@
+[
+  {"ferramenta": "Trivy", "regra": "CVE-2025-8869, CVE-2026-13346, CVE-2026-3219, CVE-2026-6357, CVE-2026-8643, CVE-2026-1703", "severidade": "MEDIUM (5) + LOW (1)", "arquivo": "imagens api e dashboard: pip 25.0.1 da imagem base", "risco": "Instalação arbitrária de arquivos via índice malicioso, path traversal e execução de código ao instalar pacotes", "correcao": "pip 26.2.0 antes de instalar dependências + pip REMOVIDO das imagens finais (em produção ninguém instala pacote)"},
+  {"ferramenta": "Trivy", "regra": "CVE-2025-47273, CVE-2026-59890, CVE-2026-24049, CVE-2026-23949", "severidade": "HIGH (3) + MEDIUM (1)", "arquivo": "imagem inferencia: setuptools 78.1.0 (com wheel e jaraco.context vendorizados) vindo do índice do PyTorch", "risco": "Path traversal e escalada de privilégio/execução de código em ferramentas de empacotamento", "correcao": "setuptools 83.0.0 (PyPI) instalado logo após o torch"}
+]

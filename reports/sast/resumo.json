@@ -1,0 +1,146 @@
+{
+  "gerado_em": "2026-10-14T13:03:03+00:00",
+  "bandit": {
+    "antes": {
+      "CRITICAL": 0,
+      "HIGH": 1,
+      "MEDIUM": 1,
+      "LOW": 4
+    },
+    "depois": {
+      "CRITICAL": 0,
+      "HIGH": 0,
+      "MEDIUM": 0,
+      "LOW": 0
+    }
+  },
+  "trivy": {
+    "api": {
+      "antes": {
+        "CRITICAL": 0,
+        "HIGH": 0,
+        "MEDIUM": 5,
+        "LOW": 1
+      },
+      "depois": {
+        "CRITICAL": 0,
+        "HIGH": 0,
+        "MEDIUM": 0,
+        "LOW": 0
+      }
+    },
+    "inferencia": {
+      "antes": {
+        "CRITICAL": 0,
+        "HIGH": 3,
+        "MEDIUM": 1,
+        "LOW": 0
+      },
+      "depois": {
+        "CRITICAL": 0,
+        "HIGH": 0,
+        "MEDIUM": 0,
+        "LOW": 0
+      }
+    },
+    "dashboard": {
+      "antes": {
+        "CRITICAL": 0,
+        "HIGH": 0,
+        "MEDIUM": 5,
+        "LOW": 1
+      },
+      "depois": {
+        "CRITICAL": 0,
+        "HIGH": 0,
+        "MEDIUM": 0,
+        "LOW": 0
+      }
+    },
+    "dependencias": {
+      "antes": {
+        "CRITICAL": 0,
+        "HIGH": 0,
+        "MEDIUM": 0,
+        "LOW": 0
+      },
+      "depois": {
+        "CRITICAL": 0,
+        "HIGH": 0,
+        "MEDIUM": 0,
+        "LOW": 0
+      }
+    }
+  },
+  "mitigados": [
+    {
+      "ferramenta": "Bandit",
+      "regra": "B101",
+      "severidade": "LOW",
+      "arquivo": "src/api/repositorio.py",
+      "risco": "assert usado como controle (allowlist de colunas, invariantes): o Python remove assert com -O",
+      "correcao": "Trocado por exceção explícita (ValueError/RuntimeError)"
+    },
+    {
+      "ferramenta": "Bandit",
+      "regra": "B608",
+      "severidade": "MEDIUM",
+      "arquivo": "src/api/repositorio.py",
+      "risco": "SQL montado com f-string a partir das chaves de um dicionário: um nome de coluna vindo de fora viraria injeção de SQL",
+      "correcao": "Allowlist de colunas + psycopg.sql.Identifier; valores sempre como parâmetros"
+    },
+    {
+      "ferramenta": "Bandit",
+      "regra": "B101",
+      "severidade": "LOW",
+      "arquivo": "src/api/repositorio.py",
+      "risco": "assert usado como controle (allowlist de colunas, invariantes): o Python remove assert com -O",
+      "correcao": "Trocado por exceção explícita (ValueError/RuntimeError)"
+    },
+    {
+      "ferramenta": "Bandit",
+      "regra": "B101",
+      "severidade": "LOW",
+      "arquivo": "src/data/simulacao.py",
+      "risco": "assert usado como controle (allowlist de colunas, invariantes): o Python remove assert com -O",
+      "correcao": "Trocado por exceção explícita (ValueError/RuntimeError)"
+    },
+    {
+      "ferramenta": "Bandit",
+      "regra": "B101",
+      "severidade": "LOW",
+      "arquivo": "src/models/avaliar_nlp.py",
+      "risco": "assert usado como controle (allowlist de colunas, invariantes): o Python remove assert com -O",
+      "correcao": "Trocado por exceção explícita (ValueError/RuntimeError)"
+    },
+    {
+      "ferramenta": "Bandit",
+      "regra": "B613",
+      "severidade": "HIGH",
+      "arquivo": "src/validacao/esquemas.py",
+      "risco": "Caracteres bidirecionais Unicode literais no código-fonte (ataque Trojan Source, CVE-2021-42574): o código exibido pode ser diferente do executado",
+      "correcao": "Caracteres reescritos como escapes ASCII (\\u200f...) no regex que barra invisíveis"
+    },
+    {
+      "ferramenta": "Trivy",
+      "regra": "CVE-2025-8869, CVE-2026-13346, CVE-2026-3219, CVE-2026-6357, CVE-2026-8643, CVE-2026-1703",
+      "severidade": "MEDIUM (5) + LOW (1)",
+      "arquivo": "imagens api e dashboard: pip 25.0.1 da imagem base",
+      "risco": "Instalação arbitrária de arquivos via índice malicioso, path traversal e execução de código ao instalar pacotes",
+      "correcao": "pip 26.2.0 antes de instalar dependências + pip REMOVIDO das imagens finais (em produção ninguém instala pacote)"
+    },
+    {
+      "ferramenta": "Trivy",
+      "regra": "CVE-2025-47273, CVE-2026-59890, CVE-2026-24049, CVE-2026-23949",
+      "severidade": "HIGH (3) + MEDIUM (1)",
+      "arquivo": "imagem inferencia: setuptools 78.1.0 (com wheel e jaraco.context vendorizados) vindo do índice do PyTorch",
+      "risco": "Path traversal e escalada de privilégio/execução de código em ferramentas de empacotamento",
+      "correcao": "setuptools 83.0.0 (PyPI) instalado logo após o torch"
+    }
+  ],
+  "gate": {
+    "regra": "0 achados ALTO/CRÍTICO abertos (Bandit + Trivy, com correção disponível)",
+    "altos_ou_criticos_abertos": 0,
+    "aprovado": true
+  }
+}

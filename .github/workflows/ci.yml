@@ -1,0 +1,153 @@
+# Pipeline DevSecOps da Rede Alimenta IA (SDD §8)
+#   testes → SAST (Bandit) → build das imagens + Trivy (imagens, dependências, Dockerfile) → security gate → deploy
+# O deploy nos Hugging Face Spaces só acontece em push na main E com o gate aprovado.
+name: CI DevSecOps
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read  # menor privilégio para o GITHUB_TOKEN
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHON_VERSION: "3.12"
+  # Trivy 0.76.0 fixado por DIGEST (tag pode ser reapontada; digest não: supply chain)
+  TRIVY_IMAGEM: aquasec/trivy:0.76.0@sha256:2416d1f74045b57274df1a340eee6b510cacd73c66a6ccb8da092b117eb7d222
+
+jobs:
+  testes:
+    name: Testes, qualidade de dados e esquema do banco
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: senha-descartavel-do-ci
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      REDE_ALIMENTA_PG_TESTE: postgresql://postgres:senha-descartavel-do-ci@localhost:5432/postgres
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: requirements*.txt
+      - name: Instalar dependências (torch CPU)
+        run: |
+          pip install torch==2.14.0 --index-url https://download.pytorch.org/whl/cpu
+          pip install -r requirements-dev.txt
+      - name: Treinar os modelos a partir do dataset versionado
+        run: python -m src.models.treinar > /dev/null
+      - name: Testes (inclui esquema real no PostgreSQL e carga do ano simulado)
+        run: pytest -q
+      - name: Qualidade de dados (15 checagens)
+        run: python -m src.governanca.qualidade
+
+  sast:
+    name: SAST com Bandit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - run: pip install bandit==1.9.4
+      - name: Bandit (relatório JSON + texto)
+        run: |
+          mkdir -p reports/sast
+          bandit -r src -f json -o reports/sast/bandit.json || true
+          bandit -r src -f txt -o reports/sast/bandit.txt || true
+          cat reports/sast/bandit.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bandit
+          path: reports/sast/bandit.*
+
+  imagens:
+    name: Build das imagens + Trivy
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build (api, dashboard, inferência)
+        run: |
+          for alvo in api dashboard inferencia; do
+            docker buildx build --load --target "$alvo" -t "rede-alimenta/$alvo:ci" .
+          done
+      - name: Trivy nas imagens (CVEs de SO e de bibliotecas)
+        run: |
+          mkdir -p reports/sast
+          for alvo in api dashboard inferencia; do
+            docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v "$PWD/reports/sast:/out" "$TRIVY_IMAGEM" \
+              image --scanners vuln --ignore-unfixed --format json -o "/out/trivy-$alvo.json" "rede-alimenta/$alvo:ci"
+            docker run --rm -v /var/run/docker.sock:/var/run/docker.sock "$TRIVY_IMAGEM" \
+              image --scanners vuln --ignore-unfixed --severity HIGH,CRITICAL "rede-alimenta/$alvo:ci"
+          done
+      - name: Trivy nas dependências e no Dockerfile/Compose (configuração)
+        run: |
+          # O Trivy não segue "-r": achata os requirements num arquivo só (dependências diretas, fixadas).
+          mkdir -p /tmp/deps && grep -hvE '^\s*(#|-r|$)' requirements*.txt | sort -u > /tmp/deps/requirements.txt
+          docker run --rm -v /tmp/deps:/src:ro -v "$PWD/reports/sast:/out" "$TRIVY_IMAGEM"             fs --scanners vuln --ignore-unfixed --format json -o /out/trivy-dependencias.json /src
+          docker run --rm -v "$PWD:/src:ro" "$TRIVY_IMAGEM" config --exit-code 1 --severity HIGH,CRITICAL /src
+      - uses: actions/upload-artifact@v4
+        with:
+          name: trivy
+          path: reports/sast/trivy-*.json
+
+  gate:
+    name: Security gate
+    needs: [testes, sast, imagens]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - uses: actions/download-artifact@v4
+        with:
+          path: reports/sast
+          merge-multiple: true
+      - name: Resumo + gate (0 ALTO/CRÍTICO aberto)
+        run: |
+          pip install pandas==3.0.6 pyshp==3.1.6
+          python -m src.seguranca.relatorio_sast --gate
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: resumo-seguranca
+          path: reports/sast/resumo.json
+
+  deploy:
+    name: Deploy nos Hugging Face Spaces
+    needs: gate
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.HF_USUARIO != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: producao
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: resumo-seguranca
+          path: reports/sast
+      - name: Publicar API e dashboard
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          HF_USUARIO: ${{ vars.HF_USUARIO }}
+        run: |
+          pip install huggingface_hub==1.32.0
+          python deploy/publicar_hf.py

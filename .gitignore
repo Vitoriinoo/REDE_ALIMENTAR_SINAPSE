@@ -31,3 +31,4 @@ Thumbs.db
 # Logs locais de execução
 reports/_*.log
 .pytest_cache/
+.claude/

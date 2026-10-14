@@ -1,0 +1,6 @@
+# Container do dashboard (só leitura de visões agregadas).
+-r requirements-base.txt
+streamlit==1.65.0
+plotly==7.1.0
+pydeck==0.9.3
+psycopg[binary]==3.3.6
