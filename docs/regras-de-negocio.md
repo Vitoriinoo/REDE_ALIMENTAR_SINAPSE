@@ -1,6 +1,6 @@
 # Rede Alimenta IA: Regras de Negócio
 
-> **Status:** v2.0, decisões do grupo em 2026-10-05 sobre a v1.1 (2026-09-23).
+> **Status:** v2.1, decisões do grupo em 2026-10-08 e 2026-10-14 sobre a v2.0 (2026-10-05) e a v1.1 (2026-09-23).
 > Este documento é a **fonte de verdade** do gerador de dados (`src/data`), dos modelos (`src/models`), da validação (`src/validacao`), da observabilidade (`src/observabilidade`) e da Matriz STRIDE (`docs/stride`).
 > Requisitos de produto: [PRD](prd.md). Arquitetura: [SDD](sdd.md). Governança: [docs/governanca](governanca/).
 
@@ -19,6 +19,17 @@
 | Observabilidade | — | Alerta quando algo **sai do normal**, não só quando bate o teto | 10.2 |
 | Controle da IA | Implícito | Desligamento por modelo, piso de segurança, inventário de agência | 10.3 |
 | Feedback humano | — | Ciclo de **4 passos** (RLHF adaptado a classificadores) | 10.4 |
+
+### O que mudou na v2.1 (checklist do professor, 2026-10-08 e 2026-10-14)
+
+| Tema | v2.0 | v2.1 | Seção |
+|---|---|---|---|
+| Doador "só entrega" × ONG "só busca" | Não representável (só capacidade) | **Capacidade separada de restrição**. O impasse é **bloqueado** no código, e a única saída é o **hub** como ponto de encontro | 6.6 |
+| Par redundante (os dois têm veículo) | Preferência (score 0) | **Proibido** quando há outra ONG viável. Sem alternativa, é permitido como **exceção registrada no log** | 6.6 |
+| Disponibilidade | Só a janela da ONG | **Mútua**: janela do doador + "disponível até" do lote + janela da ONG | 6.1 |
+| Dinheiro (caixa) | `float` | `Decimal` no código e `NUMERIC(10,2)` no banco | 9 |
+| Banco | Sem esquema | `db/schema.sql`: `NUMERIC` em toda quantidade, `UUID` nas chaves, RLS, declarações só de inclusão | SDD §5 |
+| Mural de pedidos | Só caracteres de controle | Observação do pedido passa pelo **guardrail** | 6.5 |
 
 ---
 
@@ -272,7 +283,8 @@ Faixas de **validade efetiva restante** (seção 4.2):
 | Refrigeração | Item de cadeia fria **fora da rota expressa** exige refrigeração; **Congelado** em freezer exige freezer |
 | Preparo | Lote que **requer preparo** (Q4) só vai para ONG com **cozinha** ou que **distribui cestas** (a família cozinha em casa) |
 | Capacidade | Capacidade do dia restante ≥ peso do lote |
-| Disponibilidade | O lote consegue **chegar dentro da janela de recebimento** antes do limite de consumo |
+| Disponibilidade **mútua** (v2.1) | O lote **sai** do doador dentro da janela dele (e antes do "disponível até" do lote) e **chega** dentro da janela de recebimento da ONG, antes do limite de consumo |
+| Modo logístico (v2.1) | Existe um jeito de o alimento sair do doador e chegar à ONG. O **impasse** "só entrega × só busca" é bloqueado, salvo via hub (6.6) |
 | Rota expressa | ONG serve refeição no mesmo turno e o trajeto ≤ 30 min (7.5) |
 
 **Etapa 2: score de prioridade entre as elegíveis.**
@@ -373,7 +385,26 @@ Doador e ONG declaram se têm transporte: o doador **pode entregar**, a ONG **po
 | Não | Não | Depende da cascata de transporte (7.2) | 0,5 |
 | Sim | Sim | **Redundante:** gasta o veículo da ONG que outro doador sem transporte precisaria | 0 |
 
-**É preferência forte, não proibição.** Se a única ONG viável for "redundante", o lote vai para ela mesmo assim: perder a comida é pior do que usar mal um veículo.
+**v2.1: capacidade ≠ restrição.** "Pode entregar" e "pode buscar" dizem se a pessoa **tem** transporte. Já o checklist do professor fala de quem **só** entrega e de quem **só** busca. Por isso o cadastro ganhou duas restrições:
+
+| Campo | Quem declara | Significado |
+|---|---|---|
+| `aceita_coleta = falso` | Doador | "Só entrego": ninguém coleta no meu endereço. O esquema exige `pode_entregar` (senão o lote nunca sai) |
+| `aceita_receber_entrega = falso` | ONG | "Só busco": não recebo no meu endereço. Exige veículo próprio |
+
+**Regra 1, impasse (filtro rígido, `modo_logistico`).** O match é **bloqueado** quando nenhum caminho fecha:
+
+| Caminho | Condição |
+|---|---|
+| Direto: a ONG busca | ONG tem veículo **e** doador aceita coleta |
+| Direto: o doador entrega | Doador alcança a ONG (raio de entrega) **e** a ONG recebe entrega |
+| Direto: terceiro | Doador aceita coleta **e** ONG recebe entrega (voluntário, motorista de retorno, transportadora, app) |
+| **Via hub** (ponto de encontro, 7.4) | O doador leva até um hub no alcance dele (≤ 6 km) e, **de lá**, a ONG busca (se tem veículo) **ou** um transporte da cascata leva até ela (se ela recebe entrega). Ninguém coleta no doador, e a ONG que "só busca" busca no hub. Não vale na rota expressa (porta a porta) |
+| Nenhum | **IMPASSE: bloqueado**, e o número de ONGs barradas vai para o log e para o Modelo 2 (`n_ongs_impasse`) |
+
+**Regra 2, par redundante.** Doador que entrega + ONG que busca é **proibido** quando existe outra ONG viável. Se for a **única** ONG viável, o match é permitido como **exceção**, com o evento `EXCECAO_REDUNDANTE` no log, porque perder a comida é pior do que usar mal um veículo.
+
+> **Custo medido (simulação, 15% de doadores "só entrega" e 15% de ONGs "só busca", premissa do grupo):** com o hub só como ponto de encontro com a ONG, o descarte geral foi a **20,1%**, e os lotes de quem "só entrega" chegavam a 58,6%. Abrir o hub para qualquer transporte da cascata (decisão de 2026-10-14) levou o descarte a **17,8%** e os lotes de quem "só entrega" a 39,5% (contra 14,8% dos demais). Os pares redundantes caíram para 0,2%, todos como exceção logada.
 
 ---
 
@@ -485,6 +516,7 @@ Os tempos são sorteados a partir de distribuições que dependem de hora, dia, 
 - A plataforma **não guarda dinheiro** nem processa pagamentos. Mantém só um **livro-caixa transparente**: aportes, entregas pagas e comprovantes.
 - O pagamento acontece **fora** da plataforma (ONG ou parceiro paga direto no app de entrega).
 - **Sem lucro:** só o custo do entregador.
+- **Dinheiro nunca em ponto flutuante (v2.1):** `Decimal` com 2 casas no código (`logistica.reais()` recusa `float`) e `NUMERIC(10,2)` no banco. Em `float`, 0,1 + 0,2 ≠ 0,3, e a soma do dia poderia passar do teto por arredondamento.
 
 | Valor | Aprovação |
 |---|---|
@@ -599,21 +631,31 @@ O RLHF clássico (pré-treino → preferências humanas → modelo de recompensa
 | 3. O feedback é validado | Só de contas **verificadas**; no máximo **20 correções por ator por dia**; nenhum ator responde por mais de **2% dos rótulos novos**; ator com taxa de correção fora da linha de base vai para **quarentena** e revisão | Defesa contra **envenenamento de dados** (OWASP LLM04, MITRE ATLAS AML.T0020) |
 | 4. Retreino com portão | O modelo candidato só é promovido se **não piorar** (tolerância de 0,5 p.p.) no conjunto de teste fixo (que nunca recebe feedback), mantiver as metas (recall CRÍTICA ≥ 90%, recall descarte ≥ 85%) e um **humano diferente de quem treinou** aprovar | Versão anterior guardada para **rollback** |
 
-**Demonstração com o NLP real** (`python -m src.models.demo_feedback` → `reports/feedback_demo.json`). Foram 5.749 feedbacks: os doadores honestos do período de validação, 80 "correções" de um atacante (marmita → não perecível) e 30 de uma conta não verificada.
+**Mapeamento consciente com o RLHF clássico:**
 
-| Candidato | Acurácia (teste fixo) | Preparado | Portão |
+| Passo clássico (LLM) | Equivalente aqui | Por que adaptado |
+|---|---|---|
+| 1. Pré-treino / ajuste supervisionado | Treino inicial dos modelos no dataset calibrado (`src/models/treinar.py`) e exemplos do NLP | Classificador pequeno, sem modelo de linguagem para pré-treinar |
+| 2. Coleta de preferências humanas (comparar respostas) | Passo 2: correção humana de uma sugestão (categoria, prioridade, recusa na inspeção) | Num classificador, o humano dá o **rótulo certo** em vez de comparar duas respostas |
+| 3. Modelo de recompensa | Passo 3 + portão: validação da origem do feedback e teste fixo com metas mínimas | O "juiz" é uma regra auditável e um conjunto de teste que nunca recebe feedback, e não um segundo modelo que também poderia ser envenenado |
+| 4. Otimização por PPO | Passo 4: retreino supervisionado com os rótulos validados + promoção com aprovação humana + rollback | Sem política generativa para otimizar; o retreino comum é suficiente e explicável |
+
+**Demonstração com o NLP real** (`python -m src.models.demo_feedback` → `reports/feedback_demo.json`, dataset v2.1). Foram 5.627 feedbacks: os doadores honestos do período de validação, 80 "correções" de um atacante (marmita → não perecível) e 30 de uma conta não verificada.
+
+| Candidato | Acurácia (teste fixo) | Preparado (meta ≥ 90%) | Portão |
 |---|---|---|---|
-| Modelo atual | 75,3% | 68% | — |
-| Validado, **todos** os rótulos humanos (confirmações + correções) | **85,3%** | 72% | ✅ promovido |
-| Validado, **só as correções** | 66,0% | 54% | ❌ barrado (piorou) |
-| **Sem** a validação (com o veneno) | 86,3% | 72% | ⚠️ passaria |
+| Modelo atual | 80,3% | 92% | — |
+| Validado, **todos** os rótulos humanos (confirmações + correções) | **89,0%** | 80% | ❌ barrado (classe crítica abaixo da meta) |
+| Validado, **só as correções** | 65,7% | 68% | ❌ barrado (piorou) |
+| **Sem** a validação (com o veneno) | 89,3% | 80% | ❌ barrado (mesma razão) |
 
 O que a demonstração mostra:
-1. **O passo 3 é a defesa central.** O atacante foi para a quarentena com 0 feedbacks aceitos, e a conta não verificada foi barrada. Sem essa validação, o veneno, diluído em 5,7 mil rótulos, **não mexe na métrica** e **passaria no portão**. Um envenenamento discreto não aparece na acurácia: por isso a origem do dado é validada antes.
-2. **O portão protege contra retreino ingênuo.** Treinar só com as correções (os textos difíceis) piorou o modelo, e o portão barrou.
-3. **Custo da quarentena:** 1 doador honesto que corrigia muito (60% vs. mediana de 24%) também foi para a quarentena. Ela gera **revisão humana**, não punição.
-4. **Limite:** a quarentena compara o ator com os pares e só funciona quando eles têm histórico (≥ 10 feedbacks). Com pouco feedback, só a cota por ator segura o atacante.
-5. **Ressalva:** o teste vem do mesmo gerador de frases do dataset simulado, então o ganho de 75% → 85% é otimista. O conjunto independente do grupo é a verificação real.
+1. **O passo 3 é a defesa central.** O atacante foi para a quarentena com 0 feedbacks aceitos (taxa de correção de 100% contra mediana de 25%, z = 8,8), e a conta não verificada foi barrada. Sem essa validação, o veneno, diluído em 5,6 mil rótulos, **não mexe na acurácia geral** (89,3% contra 89,0% do candidato limpo). Envenenamento discreto não aparece na métrica, e por isso a **origem** do dado é validada antes.
+2. **O portão olha a classe que importa, não só a média.** O candidato limpo subiu a acurácia geral de 80,3% para 89,0%, mas derrubou "preparado" (a comida que estraga em 3 h) de 92% para 80%. Pela média, seria promovido. Pela meta da classe crítica, foi **barrado**. É a mesma lógica do piso de segurança do M1: o modelo novo não pode piorar justamente o caso que mais custa.
+3. **O portão protege contra retreino ingênuo.** Treinar só com as correções (os textos difíceis) piorou tudo, e o portão barrou.
+4. **Quarentena sem falso positivo nesta rodada:** só o atacante foi para a quarentena. Ela gera **revisão humana**, não punição.
+5. **Limite:** a quarentena compara o ator com os pares e só funciona quando eles têm histórico (≥ 10 feedbacks). Com pouco feedback, só a cota por ator segura o atacante.
+6. **Ressalva:** o teste vem do mesmo gerador de frases do dataset simulado, então os ganhos são otimistas. O conjunto independente do grupo é a verificação real.
 
 ---
 
@@ -683,6 +725,13 @@ Não existe um padrão brasileiro oficial de "kg doado → refeição". Por isso
 - [x] CNPJ: dígito verificador (com alfanumérico) + BrasilAPI (6.3)
 - [x] Pedidos de ONG, filtro por cozinha, tempo até receber, complementaridade como preferência (6.1, 6.4–6.6)
 - [x] Feedback humano em 4 passos (10.4)
+
+**v2.1: decididos pelo grupo em 2026-10-08 e 2026-10-14**
+- [x] Impasse "só entrega × só busca" **bloqueado** (leitura A do checklist); redundante proibido com alternativa e permitido só como exceção logada (6.6)
+- [x] Hub destrava o impasse com qualquer transporte da cascata a partir do hub (6.6)
+- [x] 15% de doadores "só entrega" e 15% de ONGs "só busca" na simulação (premissa)
+- [x] Disponibilidade mútua: janela do doador + "disponível até" (6.1)
+- [x] `NUMERIC` em toda quantidade no banco, `UUID` nas chaves, `Decimal` no caixa (9, SDD §5)
 
 **v2.0: valores propostos na implementação, para o grupo revisar**
 - [ ] Pesos do score v2 (6.1): acesso 0,30 · capacidade 0,15 · vulnerabilidade 0,30 · turno 0,10 · complementaridade 0,15 · pedido +0,10

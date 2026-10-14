@@ -35,16 +35,16 @@ Hoje a doação depende de contato informal (WhatsApp, telefone). Isso gera quat
 
 | Objetivo | Métrica | Meta | Simulado v2.0 |
 |---|---|---|---|
-| Salvar comida | Taxa de descarte dos lotes aceitos | < 20% | **15,2%** |
-| Impacto social | Refeições geradas por ano | Mostrar por região | **~921 mil** (345 t) |
-| Rapidez | Tempo mediano até o aceite da ONG | ≤ 30 min (benchmark de mercado: ~8 min) | **27,8 min** |
-| IA útil: prioridade | Recall da classe CRÍTICA (M1) | ≥ 90% | **95,2%** |
-| IA útil: descarte | Recall de descarte (M2) / PR-AUC vs. heurística | ≥ 85% / acima da heurística | **83,4%** / 0,55 vs. 0,27 |
-| Uso eficiente da logística | Matches complementares (busca × entrega) | Maioria | **56%** (redundantes: 10%) |
+| Salvar comida | Taxa de descarte dos lotes aceitos | < 20% | **17,8%** |
+| Impacto social | Refeições geradas por ano | Mostrar por região | **~951 mil** (352 t) |
+| Rapidez | Tempo mediano até o aceite da ONG | ≤ 30 min (benchmark de mercado: ~8 min) | **26,4 min** |
+| IA útil: prioridade | Recall da classe CRÍTICA (M1) | ≥ 90% | **94,3%** |
+| IA útil: descarte | Recall de descarte (M2) / PR-AUC vs. heurística | ≥ 85% / acima da heurística | **87,1%** / 0,65 vs. 0,28 |
+| Uso eficiente da logística | Matches complementares (busca × entrega) | Maioria | **54,5%** (redundantes: 0,2%, só como exceção) |
 | Segurança | Achados ALTO/CRÍTICO de SAST e dependências | 0 em produção | CP2 |
 | Rastreabilidade | Decisões com registro auditável íntegro | 100% | Cadeia HMAC verificada em teste |
 
-> **Recall do M2 no teste (83,4%) ficou abaixo da meta de 85%.** O limiar foi escolhido na validação, que é o certo metodologicamente, e o teste mostra a queda na troca de período. Fica registrado como risco e como gatilho de revisão no ciclo de feedback (regras 10.4).
+> **Recall do M2 no teste (v2.1): 87,1%, acima da meta.** Na v2.0 tinha ficado em 83,4%. O limiar continua sendo escolhido na validação, e o teste é só a conferência. A nova feature `n_ongs_impasse` e a restrição `doador_aceita_coleta` explicam parte do ganho: o modelo passou a "ver" quando a logística do lote está travada.
 
 ## 5. Requisitos funcionais
 
@@ -60,7 +60,7 @@ Hoje a doação depende de contato informal (WhatsApp, telefone). Isso gera quat
 | RF-08 | Ranking de ONGs com filtros obrigatórios e score auditável | 6.1 | Pronto |
 | RF-09 | ONG declara capacidades, janela de recebimento e categorias aceitas | 6.4 | Pronto |
 | RF-10 | ONG **pede** alimentos (mural + bônus no ranking) | 6.5 | Pronto (simulação); API no CP3 |
-| RF-11 | Complementaridade busca × entrega como preferência | 6.6 | Pronto |
+| RF-11 | Impasse "só entrega × só busca" **bloqueado** (salvo via hub); par redundante proibido com alternativa | 6.6 | Pronto (v2.1) |
 | RF-12 | Transporte em cascata (gratuito antes do pago), cadeia fria e rota expressa | 7 | Pronto |
 | RF-13 | Modelo 2 decide quando vale acionar o entregador pago | 8 | Pronto |
 | RF-14 | Caixa solidário com tetos e aprovação externa | 9 | Pronto |
@@ -76,9 +76,11 @@ Hoje a doação depende de contato informal (WhatsApp, telefone). Isso gera quat
 | RNF-04 **Observabilidade** | Avisar no desvio, não só no teto | Linha de base robusta, 3 níveis, freio automático, PSI |
 | RNF-05 **Controle da IA** | IA desligável, saída validada, toda chamada registrada | Camada de controle única (`src/models/controle.py`) |
 | RNF-06 **Integridade da IA** | Artefato verificado; feedback não envenena o modelo | SHA-256 antes do load; validação de feedback + portão de promoção |
-| RNF-07 **Desempenho** | Sugestão do NLP < 50 ms; ranking < 200 ms | NLP por embeddings: 4,4 ms/texto (75,3% de acurácia) |
+| RNF-07 **Desempenho** | Sugestão do NLP < 50 ms; ranking < 200 ms | NLP por embeddings: 6,6 ms/texto (80,3% de acurácia, dataset v2.1) |
 | RNF-08 **Custo** | Stack gratuita | Python, FastAPI, Streamlit, Supabase, Render/HF, GitHub Actions |
-| RNF-09 **Qualidade** | Testes automatizados e qualidade de dados no pipeline | 181 testes; 15 checagens de qualidade de dados |
+| RNF-09 **Qualidade** | Testes automatizados e qualidade de dados no pipeline | Suíte pytest + 15 checagens de qualidade de dados no GitHub Actions |
+| RNF-10 **Conformidade (GRC)** | Governança, Risco e Compliance tratados como requisito, não como anexo | Governança: política de IA + RACI. Risco: STRIDE pontuado P×I + registro de riscos. Compliance: LGPD (ROPA art. 37, RIPD), Lei 14.016/2020, CDC art. 27, ISO 27001/42001 (SDD §6.1) |
+| RNF-11 **Integridade numérica** | Nenhuma quantidade ou dinheiro em inteiro/ponto flutuante no banco | `NUMERIC` em todo campo numérico, `Decimal` no caixa, teste que barra `INTEGER`/`FLOAT` em `db/schema.sql` |
 
 ## 7. Fora de escopo
 
@@ -93,6 +95,7 @@ Hoje a doação depende de contato informal (WhatsApp, telefone). Isso gera quat
 |---|---|
 | Dados reais não estão disponíveis | Dataset simulado e **calibrado** com fontes públicas (IPVS, TACO, PAT, WRAP), com as premissas documentadas em `src/data/parametros.py` |
 | A complementaridade busca × entrega pode custar comida | Calibrada para desempatar entre ONGs acessíveis: custo de ~0,2 p.p. de descarte (regras 6.1) |
+| Bloquear o impasse busca × entrega (v2.1) aumenta o descarte | Medido: 15,2% → 20,1% com o hub só para a ONG; 17,8% abrindo o hub para a cascata. O custo fica visível no dashboard e o hub é a alavanca (regras 6.6) |
 | Filtros mais rígidos (v2.0) aumentam "sem ONG elegível" | Esperado e mostrado com transparência: o descarte simulado foi de 11,4% (v1.1) para 15,2% (v2.0), porque o sistema passou a recusar o que a ONG não comporta |
 | Doador declara falso no questionário | Inspeção na entrega + declaração assinada (responsabilidade) + alerta de reincidência |
 | Ataque ao feedback (envenenamento) | Validação em 4 camadas + portão com teste fixo e aprovação humana |
