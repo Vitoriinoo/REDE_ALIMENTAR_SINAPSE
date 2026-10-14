@@ -70,7 +70,7 @@ jobs:
           bandit -r src -f json -o reports/sast/bandit.json || true
           bandit -r src -f txt -o reports/sast/bandit.txt || true
           cat reports/sast/bandit.txt
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: bandit
           path: reports/sast/bandit.*
@@ -102,7 +102,7 @@ jobs:
           mkdir -p /tmp/deps && grep -hvE '^\s*(#|-r|$)' requirements/*.txt | sort -u > /tmp/deps/requirements.txt
           docker run --rm -v /tmp/deps:/src:ro -v "$PWD/reports/sast:/out" "$TRIVY_IMAGEM"             fs --scanners vuln --ignore-unfixed --format json -o /out/trivy-dependencias.json /src
           docker run --rm -v "$PWD:/src:ro" "$TRIVY_IMAGEM" config --exit-code 1 --severity HIGH,CRITICAL /src
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: trivy
           path: reports/sast/trivy-*.json
@@ -125,7 +125,7 @@ jobs:
         run: |
           pip install pandas==3.0.6 pyshp==3.1.6
           python -m src.seguranca.relatorio_sast --gate
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: resumo-seguranca
