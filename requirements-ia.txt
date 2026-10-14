@@ -3,7 +3,7 @@
 -r requirements-base.txt
 fastapi==0.143.0
 uvicorn==0.54.0
-torch==2.14.0
+torch==2.14.1
 transformers==5.17.0
 tokenizers==0.23.2
 safetensors==0.8.0
