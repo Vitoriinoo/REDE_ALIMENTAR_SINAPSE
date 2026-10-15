@@ -24,6 +24,8 @@ CATEGORIA = {"preparado": "Preparado", "refrigerado": "Refrigerado", "congelado"
 
 st.title("ONG")
 st.caption(f"ONG `{ident['id']}` · as ofertas atualizam sozinhas a cada 15 s")
+if aviso := st.session_state.pop("aviso_ong", None):
+    (st.success if aviso[0] == "ok" else st.error)(aviso[1])
 aba_ofertas, aba_historico, aba_perfil = st.tabs(["Ofertas e entregas", "Histórico de recebimentos", "Meu cadastro"])
 
 
@@ -32,11 +34,12 @@ def _hora(valor) -> str:
 
 
 def _agir(rota: str, corpo: dict | None, sucesso: str) -> None:
+    """A mensagem vai para a sessão: o st.rerun() logo depois apagaria um toast."""
     try:
         r = chamar("POST", rota, chave, corpo)
-        st.toast(sucesso.format(**r))
+        st.session_state["aviso_ong"] = ("ok", sucesso.format(**r))
     except ErroAPI as e:
-        st.toast(e.mensagem)
+        st.session_state["aviso_ong"] = ("erro", e.mensagem)
 
 
 @st.fragment(run_every="15s")
@@ -60,10 +63,10 @@ def painel_ong() -> None:
                           f"{'direto' if o['modo'] == 'direto' else 'via hub'} · ~{o['refeicoes_estimadas']:.0f} refeições")
             if c[3].button("Aceitar", key=f"ac_{o['codigo']}", type="primary", use_container_width=True):
                 _agir(f"/v1/lotes/{o['codigo']}/aceite", None, "Aceito em {minutos_ate_match} min do cadastro.")
-                st.rerun(scope="fragment")
+                st.rerun()
             if c[3].button("Recusar", key=f"rc_{o['codigo']}", use_container_width=True):
                 _agir(f"/v1/lotes/{o['codigo']}/recusa", None, "Recusado: oferta passou para {proxima_ong}.")
-                st.rerun(scope="fragment")
+                st.rerun()
 
     st.subheader(f"Aguardando entrega ({len(dados['aguardando_entrega'])})")
     if not dados["aguardando_entrega"]:
@@ -78,7 +81,7 @@ def painel_ong() -> None:
             if c[2].button("Confirmar entrega", key=f"en_{o['codigo']}", type="primary", use_container_width=True):
                 _agir(f"/v1/lotes/{o['codigo']}/entrega", {"inspecao_aprovada": aprovada == "Aprovada"},
                       "Entrega registrada: {status} · {refeicoes} refeições.")
-                st.rerun(scope="fragment")
+                st.rerun()
 
 
 def historico() -> None:

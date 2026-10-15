@@ -44,7 +44,7 @@ A comida sobra onde há comércio e a fome está na periferia. No recorte do pro
 | Matriz STRIDE | 34 ameaças · residual sem riscos altos ou críticos |
 | Observabilidade | 4 de 5 anomalias injetadas detectadas; alarmes falsos < 0,02% em dados normais |
 | Ciclo de feedback (RLHF adaptado) | atacante em quarentena (0 rótulos aceitos); o portão barrou um candidato que subia a média (80% → 89%) mas derrubava a classe crítica "preparado" (92% → 80%) |
-| Testes automatizados | 238 (232 locais + 6 contra PostgreSQL real no CI) |
+| Testes automatizados | 240 (234 locais + 6 contra PostgreSQL real no CI) |
 
 ---
 
