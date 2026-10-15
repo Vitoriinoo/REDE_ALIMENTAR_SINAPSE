@@ -48,9 +48,11 @@ with st.sidebar:
         with st.form("entrar", clear_on_submit=True):
             chave = st.text_input(f"Chave de acesso ({NOMES_PAPEL[escolhido]})", type="password",
                                   help="Cada doador, ONG e administrador recebe uma chave própria.")
+            # Aceita a linha inteira de segredos/chaves-api.txt ("doador:D-0008<TAB>ra_..."): vale o último trecho.
+            chave = chave.split()[-1] if chave.strip() else ""
             if st.form_submit_button("Entrar", use_container_width=True) and chave:
                 try:
-                    quem = chamar("GET", "/v1/eu", chave.strip())
+                    quem = chamar("GET", "/v1/eu", chave)
                 except ErroAPI as e:
                     st.error("Chave inválida." if e.status == 401 else e.mensagem)
                 else:
@@ -58,7 +60,7 @@ with st.sidebar:
                     if quem["papel"] != escolhido:
                         st.error(f"Esta chave não é de {NOMES_PAPEL[escolhido]}. Escolha o perfil certo acima.")
                     else:
-                        st.session_state["ident"], st.session_state["chave"] = quem, chave.strip()
+                        st.session_state["ident"], st.session_state["chave"] = quem, chave
                         st.rerun()
         st.caption("Sem chave, só o painel público fica disponível.")
 
