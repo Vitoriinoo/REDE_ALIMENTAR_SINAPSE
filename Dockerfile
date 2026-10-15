@@ -91,8 +91,12 @@ RUN pip install -r requirements/api.txt
 COPY src/ src/
 COPY data/processed/ data/processed/
 COPY db/ db/
+# Um processo só: o builder grátis do Render informa 0 núcleos físicos, e com n_jobs=-1 o joblib abria
+# um processo por núcleo lógico do HOST num container com fração de CPU (o treino não terminava).
+# Vale também em execução: 0,1 CPU e 512 MB não comportam paralelismo. O resultado não muda (seed fixa).
+ENV LOKY_MAX_CPU_COUNT=1 OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1
 # Modelos treinados no build a partir do dataset versionado (SHA-256 nos metadados, conferido no load).
-RUN mkdir -p models reports var && python -m src.models.treinar > /dev/null \
+RUN mkdir -p models reports var && python -m src.models.treinar \
     && python -m pip uninstall -y pip && chown app:app var
 ENV REDE_ALIMENTA_NLP=0 REDE_ALIMENTA_IA_DESLIGADOS=nlp PORT=10000
 USER app
