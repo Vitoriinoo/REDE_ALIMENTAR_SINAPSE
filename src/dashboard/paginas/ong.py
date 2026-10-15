@@ -1,4 +1,4 @@
-"""Tela da ONG: ofertas da vez (oferta sequencial, regras 6.2), aceite/recusa e confirmação da entrega.
+"""Tela da ONG: ofertas da vez (oferta sequencial, regras 6.2), aceite/recusa, confirmação da entrega e histórico.
 
 A ONG vê o alimento e a logística, nunca quem doou (minimização, regras 11).
 """
@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
+import pandas as pd
 import streamlit as st
 
 from src.dashboard.cliente_api import ErroAPI, chamar
@@ -21,8 +22,9 @@ if ident.get("papel") != "ong":
 CATEGORIA = {"preparado": "Preparado", "refrigerado": "Refrigerado", "congelado": "Congelado",
              "hortifruti": "Hortifrúti", "padaria": "Padaria", "nao_perecivel": "Não perecível"}
 
-st.title("Ofertas da ONG")
-st.caption(f"ONG `{ident['id']}` · atualiza sozinha a cada 15 s")
+st.title("ONG")
+st.caption(f"ONG `{ident['id']}` · as ofertas atualizam sozinhas a cada 15 s")
+aba_ofertas, aba_historico = st.tabs(["Ofertas e entregas", "Histórico de recebimentos"])
 
 
 def _hora(valor) -> str:
@@ -79,4 +81,35 @@ def painel_ong() -> None:
                 st.rerun(scope="fragment")
 
 
-painel_ong()
+def historico() -> None:
+    try:
+        h = pd.DataFrame(chamar("GET", "/v1/ong/historico", chave))
+    except ErroAPI as e:
+        st.error(e.mensagem)
+        return
+    if h.empty:
+        st.info("Nenhum recebimento registrado ainda. Lotes aparecem aqui depois da confirmação da entrega.")
+        return
+    entregues = h[h["status_final"] == "ENTREGUE"]
+    c = st.columns(3)
+    c[0].metric("Lotes recebidos", len(entregues))
+    c[1].metric("kg recebidos", f"{entregues['peso_kg'].sum():.1f}".replace(".", ","))
+    c[2].metric("Refeições", f"{entregues['refeicoes'].fillna(0).sum():.0f}")
+    situacao = {"ENTREGUE": "Recebido", "DESCARTADO": "Recusado na inspeção"}
+    st.dataframe(pd.DataFrame({
+        "Lote": h["codigo"],
+        "Alimento": h["categoria"].map(lambda c: CATEGORIA.get(c, c)),
+        "Peso (kg)": h["peso_kg"].round(1),
+        "Prioridade": h["prioridade"].map(lambda p: PRIORIDADE.get(p, p)),
+        "Aceito em": h["ts_aceite_ong"].map(_hora),
+        "Entregue em": h["ts_entrega"].map(_hora),
+        "Situação": h["status_final"].map(lambda s: situacao.get(s, s)),
+        "Refeições": h["refeicoes"].fillna(0).round(0),
+    }), hide_index=True, use_container_width=True)
+    st.caption("A ONG vê o alimento e o resultado, nunca quem doou (minimização, LGPD).")
+
+
+with aba_ofertas:
+    painel_ong()
+with aba_historico:
+    historico()

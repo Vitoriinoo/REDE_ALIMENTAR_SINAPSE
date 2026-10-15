@@ -178,18 +178,30 @@ def assinar(conteudo: dict, chave: rsa.RSAPrivateKey) -> DeclaracaoAssinada:
     )
 
 
-def verificar(declaracao: DeclaracaoAssinada, publica: rsa.RSAPublicKey) -> bool:
-    """True só se o conteúdo bate com o hash E a assinatura é da chave informada."""
-    if declaracao.algoritmo != ALGORITMO or declaracao.chave_id != chave_id(publica):
-        return False
+def verificar_itens(declaracao: DeclaracaoAssinada, publica: rsa.RSAPublicKey) -> list[dict]:
+    """Cada conferência separada, para a tela mostrar O QUE passou e o que falhou."""
     canonico = json_canonico(declaracao.conteudo)
-    if hashlib.sha256(canonico).hexdigest() != declaracao.sha256:
-        return False
+    hash_calculado = hashlib.sha256(canonico).hexdigest()
     try:
         publica.verify(base64.b64decode(declaracao.assinatura), canonico, _PSS, hashes.SHA256())
+        assinatura_ok = True
     except (InvalidSignature, ValueError):
-        return False
-    return True
+        assinatura_ok = False
+    return [
+        {"item": "Algoritmo", "ok": declaracao.algoritmo == ALGORITMO,
+         "detalhe": f"{declaracao.algoritmo} (esperado {ALGORITMO})"},
+        {"item": "Chave da plataforma", "ok": declaracao.chave_id == chave_id(publica),
+         "detalhe": f"documento: {declaracao.chave_id} · chave pública: {chave_id(publica)}"},
+        {"item": "Integridade (SHA-256)", "ok": hash_calculado == declaracao.sha256,
+         "detalhe": f"recalculado: {hash_calculado[:16]}… · registrado: {declaracao.sha256[:16]}…"},
+        {"item": "Assinatura RSA-PSS", "ok": assinatura_ok,
+         "detalhe": "confere com a chave pública" if assinatura_ok else "não confere: conteúdo ou assinatura alterados"},
+    ]
+
+
+def verificar(declaracao: DeclaracaoAssinada, publica: rsa.RSAPublicKey) -> bool:
+    """True só se o conteúdo bate com o hash E a assinatura é da chave informada."""
+    return all(i["ok"] for i in verificar_itens(declaracao, publica))
 
 
 # --- Repositório só de inclusão ----------------------------------------------------------------

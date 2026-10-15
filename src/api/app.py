@@ -47,6 +47,7 @@ from src.seguranca.declaracao import (
     montar_conteudo,
     salvar_par_de_chaves,
     verificar,
+    verificar_itens,
 )
 from src.seguranca.declaracao_pdf import gerar_pdf
 from src.seguranca.minimizacao import pseudonimo
@@ -373,6 +374,14 @@ def ofertas_da_ong(ident: Identidade = Depends(exige(Papel.ONG))) -> dict:
             "aguardando_entrega": [_resumo_oferta(l, ident.id) for l in E.repo.entregas_da_ong(ident.id)]}
 
 
+@app.get("/v1/ong/historico", tags=["ongs"])
+def historico_da_ong(ident: Identidade = Depends(exige(Papel.ONG))) -> list[dict]:
+    """O que a ONG já recebeu (ou recusou na inspeção): alimento e resultado, nunca quem doou."""
+    return [_resumo_oferta(l, ident.id) | {"status_final": l["status_final"], "ts_entrega": l.get("ts_entrega"),
+                                           "refeicoes": l.get("refeicoes"), "motivo_descarte": l.get("motivo_descarte")}
+            for l in E.repo.historico_da_ong(ident.id)]
+
+
 @app.post("/v1/lotes/{codigo}/recusa", tags=["ongs"])
 def recusar_lote(codigo: CodigoLote, ident: Identidade = Depends(exige(Papel.ONG))) -> dict:
     """A ONG recusa: a oferta passa para a próxima do ranking. A partir de 3 recusas, escala ao admin (6.2)."""
@@ -448,8 +457,20 @@ def _declaracao_do_lote(codigo: str, ident: Identidade):
 @app.get("/v1/lotes/{codigo}/declaracao", tags=["lotes"])
 def ver_declaracao(codigo: CodigoLote, ident: Identidade = Depends(autenticado)) -> dict:
     d = _declaracao_do_lote(codigo, ident)
-    return d.para_dict() | {"assinatura_valida": verificar(d, E.chave_declaracao.public_key()),
-                            "chave_id_esperada": chave_id(E.chave_declaracao.public_key())}
+    publica = E.chave_declaracao.public_key()
+    itens = verificar_itens(d, publica)
+    return d.para_dict() | {"assinatura_valida": all(i["ok"] for i in itens), "verificacao": itens,
+                            "chave_id_esperada": chave_id(publica)}
+
+
+@app.get("/v1/declaracoes/chave-publica", tags=["lotes"])
+def chave_publica_declaracoes(_: Identidade = Depends(autenticado)) -> dict:
+    """Chave PÚBLICA da plataforma: quem recebe a declaração confere a assinatura sem confiar na API."""
+    from cryptography.hazmat.primitives import serialization
+
+    publica = E.chave_declaracao.public_key()
+    pem = publica.public_bytes(serialization.Encoding.PEM, serialization.PublicFormat.SubjectPublicKeyInfo)
+    return {"chave_id": chave_id(publica), "pem": pem.decode()}
 
 
 @app.get("/v1/lotes/{codigo}/declaracao.pdf", tags=["lotes"], response_class=Response)

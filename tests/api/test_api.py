@@ -222,3 +222,38 @@ def test_doador_ve_so_os_proprios_lotes(cliente):
     meus = cliente.get("/v1/doador/lotes", headers=PJ).json()
     assert meus and all(l["codigo"].startswith("L-API-") for l in meus)
     assert {l["codigo"] for l in meus}.isdisjoint({l["codigo"] for l in cliente.get("/v1/doador/lotes", headers=PF).json()})
+
+
+def test_historico_da_ong_mostra_o_recebido_sem_revelar_o_doador(cliente):
+    corpo = cliente.post("/v1/lotes", json=_marmita(), headers=PJ).json()
+    codigo, ong = corpo["codigo"], corpo["ong_ofertada"]["ong_id"]
+    dona = {"X-Chave-API": f"dev:ong:{ong}"}
+    cliente.post(f"/v1/lotes/{codigo}/aceite", headers=dona)
+    assert codigo not in [h["codigo"] for h in cliente.get("/v1/ong/historico", headers=dona).json()]  # pendente
+    cliente.post(f"/v1/lotes/{codigo}/entrega", json={"inspecao_aprovada": True}, headers=dona)
+    hist = cliente.get("/v1/ong/historico", headers=dona).json()
+    item = next(h for h in hist if h["codigo"] == codigo)
+    assert item["status_final"] == "ENTREGUE" and item["refeicoes"] > 0
+    assert not any("doador" in k for k in item if k != "regiao_doador")  # minimização (regras 11)
+    assert codigo not in [h["codigo"] for h in cliente.get("/v1/ong/historico",
+                                                           headers={"X-Chave-API": "dev:ong:O-999"}).json()]
+    assert cliente.get("/v1/ong/historico", headers=PJ).status_code == 403
+
+
+def test_declaracao_traz_cada_conferencia_e_a_chave_publica_verifica_fora_da_api(cliente):
+    from cryptography.hazmat.primitives.serialization import load_pem_public_key
+
+    from src.seguranca.declaracao import DeclaracaoAssinada, verificar
+
+    codigo = cliente.post("/v1/lotes", json=_marmita(), headers=PJ).json()["codigo"]
+    d = cliente.get(f"/v1/lotes/{codigo}/declaracao", headers=PJ).json()
+    assert [i["item"] for i in d["verificacao"]] == ["Algoritmo", "Chave da plataforma", "Integridade (SHA-256)",
+                                                    "Assinatura RSA-PSS"]
+    assert all(i["ok"] for i in d["verificacao"])
+    chave = cliente.get("/v1/declaracoes/chave-publica", headers=PJ).json()
+    publica = load_pem_public_key(chave["pem"].encode())
+    doc = DeclaracaoAssinada.de_dict(d)
+    assert chave["chave_id"] == d["chave_id"] and verificar(doc, publica)
+    doc.conteudo["alimento"]["peso_kg"] = 99.0  # adulteração de um número
+    assert not verificar(doc, publica)
+    assert cliente.get("/v1/declaracoes/chave-publica").status_code == 401

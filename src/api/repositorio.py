@@ -92,6 +92,10 @@ class RepositorioMemoria:
         return self._filtrar(lambda l: l["status_final"] == "PENDENTE" and l.get("ong_codigo") == ong_id
                              and l.get("ts_aceite_ong"))
 
+    def historico_da_ong(self, ong_id: str) -> list[dict]:
+        return self._filtrar(lambda l: l["status_final"] != "PENDENTE" and l.get("ong_codigo") == ong_id
+                             and l.get("ts_aceite_ong"))[:50]
+
 
 class RepositorioPostgres:
     nome = "postgres"
@@ -188,4 +192,8 @@ class RepositorioPostgres:
 
     def entregas_da_ong(self, ong_id: str) -> list[dict]:
         return self._consulta("status_final = 'PENDENTE' AND ong_codigo = %s AND ts_aceite_ong IS NOT NULL",
+                              (ong_id,))
+
+    def historico_da_ong(self, ong_id: str) -> list[dict]:
+        return self._consulta("status_final <> 'PENDENTE' AND ong_codigo = %s AND ts_aceite_ong IS NOT NULL",
                               (ong_id,))
