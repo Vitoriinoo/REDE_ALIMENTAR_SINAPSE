@@ -257,3 +257,12 @@ def test_declaracao_traz_cada_conferencia_e_a_chave_publica_verifica_fora_da_api
     doc.conteudo["alimento"]["peso_kg"] = 99.0  # adulteração de um número
     assert not verificar(doc, publica)
     assert cliente.get("/v1/declaracoes/chave-publica").status_code == 401
+
+
+def test_perfil_da_ong_mostra_o_cadastro_usado_no_matching(cliente):
+    p = cliente.get("/v1/ong/perfil", headers={"X-Chave-API": "dev:ong:O-001"}).json()
+    assert p["regiao"] == "Santo André" and p["status_aprovacao"] == "aprovada"
+    assert "preparado" in p["categorias_aceitas"] and p["abertura_h"] < p["fechamento_h"]
+    assert "documento_hash" not in p and "cd_setor" not in p
+    assert cliente.get("/v1/ong/perfil", headers={"X-Chave-API": "dev:ong:O-999"}).status_code == 404
+    assert cliente.get("/v1/ong/perfil", headers=PJ).status_code == 403

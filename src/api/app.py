@@ -374,6 +374,27 @@ def ofertas_da_ong(ident: Identidade = Depends(exige(Papel.ONG))) -> dict:
             "aguardando_entrega": [_resumo_oferta(l, ident.id) for l in E.repo.entregas_da_ong(ident.id)]}
 
 
+@app.get("/v1/ong/perfil", tags=["ongs"])
+def perfil_da_ong(ident: Identidade = Depends(exige(Papel.ONG))) -> dict:
+    """Cadastro aprovado da ONG: o que o matching usa para filtrar e ranquear (regras 6)."""
+    ongs = E.cadastro.ongs
+    linha = ongs[ongs["ong_id"] == ident.id]
+    if linha.empty:
+        raise HTTPException(404, "ONG sem cadastro aprovado")
+    o = linha.iloc[0]
+    return {
+        "ong_id": ident.id, "regiao": str(o.regiao), "municipio": str(o.municipio), "ipvs_grupo": int(o.ipvs_grupo),
+        "lat": round(float(o.lat), 3), "lon": round(float(o.lon), 3), "status_aprovacao": str(o.status_aprovacao),
+        "capacidade_kg_dia": float(o.capacidade_kg_dia), "tem_cozinha": bool(o.tem_cozinha),
+        "tem_refrigeracao": bool(o.tem_refrigeracao), "tem_freezer": bool(o.tem_freezer),
+        "distribui_cestas": bool(o.distribui_cestas), "serve_refeicao": bool(o.serve_refeicao),
+        "pode_buscar": bool(o.pode_buscar), "aceita_receber_entrega": bool(o.aceita_receber_entrega),
+        "abertura_h": float(o.abertura_h), "fechamento_h": float(o.fechamento_h),
+        "turnos": [x for x in str(o.turnos).split("|") if x and x != "nan"],
+        "categorias_aceitas": [x for x in str(o.categorias_aceitas).split("|") if x],
+    }
+
+
 @app.get("/v1/ong/historico", tags=["ongs"])
 def historico_da_ong(ident: Identidade = Depends(exige(Papel.ONG))) -> list[dict]:
     """O que a ONG já recebeu (ou recusou na inspeção): alimento e resultado, nunca quem doou."""

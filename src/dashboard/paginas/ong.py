@@ -24,7 +24,7 @@ CATEGORIA = {"preparado": "Preparado", "refrigerado": "Refrigerado", "congelado"
 
 st.title("ONG")
 st.caption(f"ONG `{ident['id']}` · as ofertas atualizam sozinhas a cada 15 s")
-aba_ofertas, aba_historico = st.tabs(["Ofertas e entregas", "Histórico de recebimentos"])
+aba_ofertas, aba_historico, aba_perfil = st.tabs(["Ofertas e entregas", "Histórico de recebimentos", "Meu cadastro"])
 
 
 def _hora(valor) -> str:
@@ -109,7 +109,62 @@ def historico() -> None:
     st.caption("A ONG vê o alimento e o resultado, nunca quem doou (minimização, LGPD).")
 
 
+IPVS = {1: "baixíssima", 2: "muito baixa", 3: "baixa", 4: "média", 5: "alta", 6: "muito alta", 7: "alta (rural)"}
+TURNOS = {"cafe": "café", "almoco": "almoço", "jantar": "jantar", "noturno": "noturno"}
+
+
+def _sim(valor: bool) -> str:
+    return "Sim" if valor else "Não"
+
+
+def meu_cadastro() -> None:
+    try:
+        p = chamar("GET", "/v1/ong/perfil", chave)
+    except ErroAPI as e:
+        st.error(e.mensagem)
+        return
+    st.caption("Cadastro aprovado pela administração depois da validação do CNPJ (dígito verificador + Receita). "
+               "É com estes dados que o sistema decide o que oferecer a esta ONG.")
+    c = st.columns(3)
+    c[0].metric("Região", p["regiao"])
+    c[1].metric("Vulnerabilidade do setor (IPVS)", f"grupo {p['ipvs_grupo']}")
+    c[1].caption(f"{IPVS.get(p['ipvs_grupo'], '')} · pesa 30% no ranking: quanto mais vulnerável, mais prioridade")
+    c[2].metric("Capacidade", f"{p['capacidade_kg_dia']:.0f} kg/dia")
+
+    esq, dir_ = st.columns(2)
+    with esq:
+        if p["aceita_receber_entrega"] and p["pode_buscar"]:
+            logistica = "Busca e também recebe entrega"
+        elif p["pode_buscar"]:
+            logistica = "Só busca (não recebe entrega)"
+        else:
+            logistica = "Só recebe entrega (sem veículo)"
+        st.table(pd.DataFrame({"Item": [
+            "Cozinha", "Geladeira", "Freezer", "Distribui cestas", "Serve refeição", "Logística",
+            "Horário de recebimento", "Turnos"], "Cadastro": [
+            _sim(p["tem_cozinha"]), _sim(p["tem_refrigeracao"]), _sim(p["tem_freezer"]), _sim(p["distribui_cestas"]),
+            _sim(p["serve_refeicao"]), logistica, f"{p['abertura_h']:.0f}h às {p['fechamento_h']:.0f}h",
+            ", ".join(TURNOS.get(x, x) for x in p["turnos"]) or "—"]}).set_index("Item"))
+        st.markdown("**Aceita:** " + ", ".join(CATEGORIA.get(x, x) for x in p["categorias_aceitas"]))
+    with dir_:
+        st.map(pd.DataFrame({"lat": [p["lat"]], "lon": [p["lon"]]}), zoom=11, height=260)
+        st.caption(f"{p['municipio']} · posição aproximada (3 casas decimais)")
+
+    st.markdown("**Como o sistema usa este cadastro**")
+    st.markdown("\n".join([
+        "- **Filtro (regra rígida):** só oferece categoria que a ONG aceita e que a estrutura comporta "
+        "(refrigerado exige geladeira, congelado exige freezer, preparar exige cozinha ou cestas).",
+        "- **Logística:** \"só busca\" com doador que \"só entrega\" é bloqueado; a saída é o hub como ponto de "
+        "encontro.",
+        "- **Ranking:** tempo até receber (inclui o horário acima), capacidade, vulnerabilidade do setor e "
+        "pedidos abertos.",
+        "- **Alteração:** passa pela administração, com nova validação (evita ONG declarar estrutura que não tem).",
+    ]))
+
+
 with aba_ofertas:
     painel_ong()
 with aba_historico:
     historico()
+with aba_perfil:
+    meu_cadastro()

@@ -40,3 +40,12 @@ def test_mediana_geral_e_de_todos_os_matches_nao_das_prioridades():
         return  # com banco configurado, quem calcula é a visão rede.vw_match_geral
     l = pd.read_csv(dados.DADOS / "lotes.csv", usecols=["minutos_ate_match"])["minutos_ate_match"].dropna()
     assert geral["mediana_min"] == l.median() and round(geral["mediana_min"], 1) == 26.4
+
+
+def test_todas_as_paginas_do_dashboard_compilam():
+    """As páginas não são importadas pelos outros testes: um erro de sintaxe só apareceria no ar."""
+    import ast
+    from pathlib import Path
+
+    for pagina in (Path(__file__).resolve().parents[1] / "src" / "dashboard").rglob("*.py"):
+        ast.parse(pagina.read_text(encoding="utf-8"), filename=str(pagina))
