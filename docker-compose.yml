@@ -43,7 +43,8 @@ services:
     environment:
       # Só a conexão de LEITURA (papel rede_dashboard, que só enxerga visões agregadas).
       REDE_ALIMENTA_DASHBOARD_DB_URL: ${REDE_ALIMENTA_DASHBOARD_DB_URL:-}
-      REDE_ALIMENTA_API_PUBLICA: http://localhost:8000
+      REDE_ALIMENTA_API_PUBLICA: http://localhost:8000   # links para quem usa o navegador
+      REDE_ALIMENTA_API_URL: http://api:8000             # chamadas das telas, de container para container
     tmpfs: ["/tmp", "/home/app"]
     networks: [externa]
     ports: ["8501:8501"]

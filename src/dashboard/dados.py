@@ -15,7 +15,25 @@ import pandas as pd
 from src.data.curadoria_ipvs import RAIZ
 
 DADOS = RAIZ / "data" / "processed"
-URL = os.environ.get("REDE_ALIMENTA_DASHBOARD_DB_URL")
+
+
+def _segredo(nome: str) -> str | None:
+    """Variável de ambiente (Docker) ou Secrets do Streamlit Community Cloud."""
+    if os.environ.get(nome):
+        return os.environ[nome]
+    try:
+        import streamlit as st
+
+        return st.secrets.get(nome)
+    except Exception:  # noqa: BLE001 - sem secrets.toml: modo arquivo
+        return None
+
+
+URL = _segredo("REDE_ALIMENTA_DASHBOARD_DB_URL")
+# Endereço da API para as pessoas (links) e para o próprio servidor do dashboard (chamadas).
+# No Compose eles diferem: o navegador usa localhost:8000, o container usa http://api:8000.
+API_PUBLICA = (_segredo("REDE_ALIMENTA_API_PUBLICA") or "http://localhost:8000").rstrip("/")
+API_INTERNA = (_segredo("REDE_ALIMENTA_API_URL") or API_PUBLICA).rstrip("/")
 
 
 def fonte() -> str:

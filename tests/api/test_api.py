@@ -188,3 +188,37 @@ def test_log_auditavel_integro_apos_o_fluxo(cliente):
     from src.api.app import E
 
     assert E.registro.verificar_cadeia() == []
+
+
+# --- Rotas das telas de operação ---------------------------------------------------------------
+def test_eu_devolve_papel_e_tipo_do_doador(cliente):
+    eu = cliente.get("/v1/eu", headers=PF).json()
+    assert {k: eu[k] for k in ("papel", "id", "tipo_doador")} == {"papel": "doador", "id": "D-0211", "tipo_doador": "PF"}
+    assert cliente.get("/v1/eu", headers=ADMIN).json() == {"papel": "admin", "id": "A-01"}
+
+
+def test_oferta_e_sequencial_e_a_recusa_passa_para_a_proxima_ong(cliente):
+    corpo = cliente.post("/v1/lotes", json=_marmita(), headers=PJ).json()
+    codigo, primeira = corpo["codigo"], corpo["ong_ofertada"]["ong_id"]
+    if not corpo["alternativas"]:
+        pytest.skip("ranking com uma ONG só neste horário")
+    segunda = corpo["alternativas"][0]["ong_id"]
+    chave_primeira, chave_segunda = {"X-Chave-API": f"dev:ong:{primeira}"}, {"X-Chave-API": f"dev:ong:{segunda}"}
+
+    ofertas = cliente.get("/v1/ong/ofertas", headers=chave_primeira).json()["ofertas"]
+    assert codigo in [o["codigo"] for o in ofertas]
+    assert all(k not in o for o in ofertas for k in ("doador_codigo", "declaracao_codigo"))  # não vê quem doou
+    assert cliente.post(f"/v1/lotes/{codigo}/aceite", headers=chave_segunda).status_code == 403  # não é a vez dela
+
+    r = cliente.post(f"/v1/lotes/{codigo}/recusa", headers=chave_primeira).json()
+    assert r["proxima_ong"] == segunda
+    assert codigo in [o["codigo"] for o in cliente.get("/v1/ong/ofertas", headers=chave_segunda).json()["ofertas"]]
+    assert cliente.post(f"/v1/lotes/{codigo}/aceite", headers=chave_segunda).status_code == 200
+    entregas = cliente.get("/v1/ong/ofertas", headers=chave_segunda).json()["aguardando_entrega"]
+    assert codigo in [o["codigo"] for o in entregas]
+
+
+def test_doador_ve_so_os_proprios_lotes(cliente):
+    meus = cliente.get("/v1/doador/lotes", headers=PJ).json()
+    assert meus and all(l["codigo"].startswith("L-API-") for l in meus)
+    assert {l["codigo"] for l in meus}.isdisjoint({l["codigo"] for l in cliente.get("/v1/doador/lotes", headers=PF).json()})

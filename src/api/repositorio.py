@@ -77,6 +77,21 @@ class RepositorioMemoria:
     def recentes(self, limite: int = 20) -> list[dict]:
         return sorted(self._lotes.values(), key=lambda l: l["ts_cadastro"], reverse=True)[:limite]
 
+    def _filtrar(self, condicao) -> list[dict]:
+        return [dict(l) for l in sorted(self._lotes.values(), key=lambda l: l["ts_cadastro"], reverse=True)
+                if condicao(l)]
+
+    def do_doador(self, doador_id: str) -> list[dict]:
+        return self._filtrar(lambda l: l["doador_codigo"] == doador_id)[:50]
+
+    def ofertas_da_ong(self, ong_id: str) -> list[dict]:
+        return self._filtrar(lambda l: l["status_final"] == "PENDENTE" and l.get("ong_codigo") == ong_id
+                             and not l.get("ts_aceite_ong"))
+
+    def entregas_da_ong(self, ong_id: str) -> list[dict]:
+        return self._filtrar(lambda l: l["status_final"] == "PENDENTE" and l.get("ong_codigo") == ong_id
+                             and l.get("ts_aceite_ong"))
+
 
 class RepositorioPostgres:
     nome = "postgres"
@@ -152,3 +167,25 @@ class RepositorioPostgres:
             return c.execute("SELECT codigo, regiao, categoria, peso_kg, prioridade, status_final, ts_cadastro "
                              "FROM rede.lotes WHERE origem = 'api' ORDER BY ts_cadastro DESC LIMIT %s",
                              (limite,)).fetchall()
+
+    def _consulta(self, onde: str, parametros: tuple) -> list[dict]:
+        """`onde` é sempre um texto FIXO deste arquivo; valores só como parâmetros."""
+        import psycopg.rows
+        from psycopg import sql
+
+        consulta = sql.SQL("SELECT * FROM rede.lotes WHERE origem = 'api' AND {} ORDER BY ts_cadastro DESC LIMIT 50"
+                           ).format(sql.SQL(onde))
+        with self._conectar() as c:
+            c.row_factory = psycopg.rows.dict_row
+            linhas = c.execute(consulta, parametros).fetchall()
+        return [{k: (float(v) if isinstance(v, Decimal) else v) for k, v in l.items()} for l in linhas]
+
+    def do_doador(self, doador_id: str) -> list[dict]:
+        return self._consulta("doador_codigo = %s", (doador_id,))
+
+    def ofertas_da_ong(self, ong_id: str) -> list[dict]:
+        return self._consulta("status_final = 'PENDENTE' AND ong_codigo = %s AND ts_aceite_ong IS NULL", (ong_id,))
+
+    def entregas_da_ong(self, ong_id: str) -> list[dict]:
+        return self._consulta("status_final = 'PENDENTE' AND ong_codigo = %s AND ts_aceite_ong IS NOT NULL",
+                              (ong_id,))

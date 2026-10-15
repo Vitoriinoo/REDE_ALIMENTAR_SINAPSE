@@ -35,6 +35,7 @@ from src.models.controle import ModeloIA
 from src.observabilidade.freio import Freio
 from src.observabilidade.registro import RegistroAuditavel, Resultado, Trilha, correlacao_atual
 from src.regras.dominio import Prioridade, TipoDoador
+from src.regras.logistica import MAX_RECUSAS_ANTES_DE_ESCALAR
 from src.regras.questionario import avaliar
 from src.regras.refeicoes import refeicoes
 from src.regras.validade import LoteRecusado, em_rota_expressa, validade_efetiva, validar_aceite
@@ -323,16 +324,85 @@ def _lote_ou_404(codigo: str) -> dict:
         raise HTTPException(404, "lote não encontrado") from None
 
 
-@app.post("/v1/lotes/{codigo}/aceite", tags=["ongs"])
-def aceitar_lote(codigo: CodigoLote, ident: Identidade = Depends(exige(Papel.ONG))) -> dict:
-    """A ONG aceita a oferta. Só uma ONG que está no ranking do lote pode aceitar."""
-    lote = _lote_ou_404(codigo)
+def _oferta_atual(lote: dict, ident: Identidade) -> tuple[int, dict]:
+    """A oferta é SEQUENCIAL (regras 6.2): só a ONG da vez (`ong_codigo`) pode aceitar ou recusar."""
     if lote["status_final"] != "PENDENTE" or lote.get("ts_aceite_ong"):
         raise HTTPException(409, "lote não está aguardando aceite")
     ranking = lote.get("ranking") or []
-    oferta = next((o for o in ranking if o["ong_id"] == ident.id), None)
-    if oferta is None:
-        raise HTTPException(403, "esta ONG não recebeu oferta deste lote")
+    posicao = next((i for i, o in enumerate(ranking) if o["ong_id"] == ident.id), None)
+    if posicao is None or lote.get("ong_codigo") != ident.id:
+        raise HTTPException(403, "esta ONG não tem oferta em aberto deste lote")
+    return posicao, ranking[posicao]
+
+
+def _resumo_oferta(lote: dict, ong_id: str) -> dict:
+    """O que a ONG vê: o alimento e a logística, nunca quem doou (minimização, regras 11)."""
+    oferta = next((o for o in (lote.get("ranking") or []) if o["ong_id"] == ong_id), {})
+    return {"codigo": lote["codigo"], "categoria": lote["categoria"], "armazenamento": lote["armazenamento"],
+            "peso_kg": float(lote["peso_kg"]), "prioridade": lote.get("prioridade"),
+            "validade_efetiva": lote.get("validade_efetiva"), "regiao_doador": lote["regiao"],
+            "km": oferta.get("km"), "minutos_ate_receber": oferta.get("minutos_ate_receber"),
+            "modo": oferta.get("modo"), "ts_cadastro": lote["ts_cadastro"], "ts_aceite_ong": lote.get("ts_aceite_ong"),
+            "refeicoes_estimadas": round(refeicoes(lote["categoria"], float(lote["peso_kg"])), 1)}
+
+
+@app.get("/v1/eu", tags=["sistema"])
+def quem_sou(ident: Identidade = Depends(autenticado)) -> dict:
+    """Quem é o dono da chave: as telas usam para mostrar só o que o papel pode fazer."""
+    corpo = {"papel": str(ident.papel), "id": ident.id}
+    if ident.papel == Papel.DOADOR:
+        try:
+            d = E.cadastro.doadores.loc[ident.id]
+            corpo |= {"tipo_doador": str(d.tipo_doador), "segmento": str(d.segmento), "regiao": str(d.regiao)}
+        except KeyError:
+            raise HTTPException(403, "doador sem cadastro ativo") from None
+    return corpo
+
+
+@app.get("/v1/doador/lotes", tags=["lotes"])
+def meus_lotes(ident: Identidade = Depends(exige(Papel.DOADOR))) -> list[dict]:
+    campos = ("codigo", "ts_cadastro", "categoria", "peso_kg", "prioridade", "status_final", "ong_codigo",
+              "motivo_descarte", "bloqueio", "refeicoes")
+    return [{k: l.get(k) for k in campos} for l in E.repo.do_doador(ident.id)]
+
+
+@app.get("/v1/ong/ofertas", tags=["ongs"])
+def ofertas_da_ong(ident: Identidade = Depends(exige(Papel.ONG))) -> dict:
+    return {"ofertas": [_resumo_oferta(l, ident.id) for l in E.repo.ofertas_da_ong(ident.id)],
+            "aguardando_entrega": [_resumo_oferta(l, ident.id) for l in E.repo.entregas_da_ong(ident.id)]}
+
+
+@app.post("/v1/lotes/{codigo}/recusa", tags=["ongs"])
+def recusar_lote(codigo: CodigoLote, ident: Identidade = Depends(exige(Papel.ONG))) -> dict:
+    """A ONG recusa: a oferta passa para a próxima do ranking. A partir de 3 recusas, escala ao admin (6.2)."""
+    lote = _lote_ou_404(codigo)
+    posicao, _ = _oferta_atual(lote, ident)
+    agora = datetime.now(timezone.utc).replace(microsecond=0)
+    ranking = lote.get("ranking") or []
+    E.repo.inserir_evento(codigo, "RECUSA_ONG", ident.ator, agora, f"posição {posicao + 1}")
+    recusas = posicao + 1
+    if recusas >= MAX_RECUSAS_ANTES_DE_ESCALAR:
+        E.repo.inserir_evento(codigo, "ESCALADA_ADMIN", "sistema", agora, f"{recusas} recusas")
+    proxima = ranking[posicao + 1] if posicao + 1 < len(ranking) else None
+    if proxima:
+        E.repo.atualizar_desfecho(codigo, ong_codigo=proxima["ong_id"], modo_logistico=proxima["modo"])
+        E.repo.inserir_evento(codigo, "OFERTA_ONG", f"ong:{proxima['ong_id']}", agora, f"score={proxima['score']}")
+    else:
+        E.repo.atualizar_desfecho(codigo, status_final="DESCARTADO", motivo_descarte="NENHUMA_ONG_ACEITOU")
+    E.registro.registrar(Trilha.AUDITORIA, componente="api.lotes", acao="RECUSA_ONG", ator=ident.ator, papel="ong",
+                         recurso=f"lote:{codigo}",
+                         detalhes={"recusas": recusas, "escalado": recusas >= MAX_RECUSAS_ANTES_DE_ESCALAR,
+                                   "proxima_ong": proxima["ong_id"] if proxima else None})
+    return {"codigo": codigo, "status": "OFERTADO_A_PROXIMA" if proxima else "SEM_ONG",
+            "proxima_ong": proxima["ong_id"] if proxima else None,
+            "escalado_ao_admin": recusas >= MAX_RECUSAS_ANTES_DE_ESCALAR}
+
+
+@app.post("/v1/lotes/{codigo}/aceite", tags=["ongs"])
+def aceitar_lote(codigo: CodigoLote, ident: Identidade = Depends(exige(Papel.ONG))) -> dict:
+    """A ONG da vez aceita a oferta (oferta sequencial, regras 6.2)."""
+    lote = _lote_ou_404(codigo)
+    _, oferta = _oferta_atual(lote, ident)
     agora = datetime.now(timezone.utc).replace(microsecond=0)
     minutos = round((agora - lote["ts_cadastro"]).total_seconds() / 60, 1)
     E.repo.atualizar_desfecho(codigo, ong_codigo=ident.id, ts_aceite_ong=agora, minutos_ate_match=minutos,
