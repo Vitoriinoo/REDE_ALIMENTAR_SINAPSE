@@ -270,6 +270,14 @@ SELECT prioridade, count(minutos_ate_match) AS matches,
        avg(minutos_ate_match) AS media_min
 FROM rede.lotes WHERE minutos_ate_match IS NOT NULL GROUP BY prioridade;
 
+-- KPI do painel: mediana de TODOS os matches (a mediana das medianas por prioridade daria outro número).
+DROP VIEW IF EXISTS rede.vw_match_geral;
+CREATE VIEW rede.vw_match_geral AS
+SELECT count(minutos_ate_match) AS matches,
+       percentile_cont(0.5) WITHIN GROUP (ORDER BY minutos_ate_match) AS mediana_min,
+       avg(minutos_ate_match) AS media_min
+FROM rede.lotes WHERE minutos_ate_match IS NOT NULL;
+
 -- Mapa de calor: refeições pelo local da ONG que RECEBEU (onde a comida chegou), em grade de ~1 km.
 DROP VIEW IF EXISTS rede.vw_calor_entregas;
 CREATE VIEW rede.vw_calor_entregas AS
@@ -296,7 +304,7 @@ GRANT UPDATE (prioridade, prioridade_fonte, risco_descarte, ong_codigo, ts_aceit
 -- Nunca UPDATE/DELETE em declaração e registro (além do gatilho, que vale até para o dono).
 REVOKE UPDATE, DELETE, TRUNCATE ON rede.declaracoes, rede.registro_auditavel FROM rede_api;
 -- Dashboard: só as visões agregadas.
-GRANT SELECT ON rede.vw_impacto_regiao, rede.vw_impacto_mensal, rede.vw_match_prioridade,
+GRANT SELECT ON rede.vw_impacto_regiao, rede.vw_impacto_mensal, rede.vw_match_prioridade, rede.vw_match_geral,
                 rede.vw_calor_entregas, rede.vw_lotes_recentes TO rede_dashboard;
 
 -- --- RLS: bloqueio por padrão; cada papel só enxerga o que a política libera ---------------------

@@ -107,6 +107,16 @@ def match_prioridade() -> pd.DataFrame:
     return pd.DataFrame({"matches": g.size(), "mediana_min": g.median(), "media_min": g.mean()}).reset_index()
 
 
+def match_geral() -> dict:
+    """Mediana e média de todos os matches (cadastro → aceite da ONG): o KPI do painel e do README."""
+    if URL:
+        linha = _sql("SELECT * FROM rede.vw_match_geral").iloc[0]
+    else:
+        m = _lotes()["minutos_ate_match"].dropna()
+        linha = {"matches": len(m), "mediana_min": m.median(), "media_min": m.mean()}
+    return {k: float(linha[k]) if linha[k] is not None else 0.0 for k in ("matches", "mediana_min", "media_min")}
+
+
 def calor() -> pd.DataFrame:
     if URL:
         return _sql("SELECT * FROM rede.vw_calor_entregas")
@@ -136,6 +146,9 @@ def alertas_ao_vivo(r: pd.DataFrame) -> tuple[pd.DataFrame, list[str | None], in
     pendente = r["status_final"] == "PENDENTE"
     niveis = [ALERTA.get(p) if pend else None for p, pend in zip(r["prioridade"], pendente)]
     tabela = r.assign(prioridade=r["prioridade"].map(lambda p: PRIORIDADE.get(p, p)))
+    for col in ("peso_kg", "risco_descarte"):  # NUMERIC chega como Decimal e aparece "9.500000"
+        if col in tabela:
+            tabela[col] = pd.to_numeric(tabela[col], errors="coerce").round(2)
     return tabela, niveis, niveis.count("critico"), niveis.count("atencao")
 
 

@@ -22,3 +22,20 @@ def test_tabela_vazia_e_prioridade_desconhecida_nao_quebram():
     assert alertas_ao_vivo(vazio)[1:] == ([], 0, 0)
     tabela, niveis, *_ = alertas_ao_vivo(pd.DataFrame({"prioridade": [None], "status_final": ["PENDENTE"]}))
     assert niveis == [None] and tabela["prioridade"].isna().all()
+
+
+def test_peso_numeric_do_banco_aparece_como_numero():
+    from decimal import Decimal
+
+    r = pd.DataFrame({"prioridade": ["BAIXA"], "status_final": ["PENDENTE"], "peso_kg": [Decimal("9.500000")]})
+    assert alertas_ao_vivo(r)[0]["peso_kg"].tolist() == [9.5]
+
+
+def test_mediana_geral_e_de_todos_os_matches_nao_das_prioridades():
+    from src.dashboard import dados
+
+    geral = dados.match_geral() if not dados.URL else None
+    if geral is None:
+        return  # com banco configurado, quem calcula é a visão rede.vw_match_geral
+    l = pd.read_csv(dados.DADOS / "lotes.csv", usecols=["minutos_ate_match"])["minutos_ate_match"].dropna()
+    assert geral["mediana_min"] == l.median() and round(geral["mediana_min"], 1) == 26.4

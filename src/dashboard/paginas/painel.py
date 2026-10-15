@@ -39,14 +39,14 @@ def pct(valor: float, casas: int = 1) -> str:
 
 @st.cache_data(ttl=60, show_spinner=False)
 def carregar():
-    return dados.impacto_regiao(), dados.mensal(), dados.match_prioridade(), dados.calor()
+    return dados.impacto_regiao(), dados.mensal(), dados.match_prioridade(), dados.calor(), dados.match_geral()
 
 
 st.title("Painel de impacto")
 st.caption(f"IA + DevSecOps contra o desperdício de alimentos na Grande São Paulo · fonte: **{dados.fonte()}** · "
            "ano simulado set/2025–ago/2026 + lotes cadastrados ao vivo pela API")
 
-regioes, mes, match, calor = carregar()
+regioes, mes, match, calor, geral = carregar()
 metricas = dados.relatorio("metricas_modelos.json") or {}
 sast = dados.relatorio("sast/resumo.json") or {}
 
@@ -57,14 +57,13 @@ with aba_impacto:
     kg, refeicoes = regioes["kg_salvos"].sum(), regioes["refeicoes"].sum()
     aceitos = regioes["entregues"].sum() + regioes["descartados"].sum()
     descarte = regioes["descartados"].sum() / aceitos if aceitos else 0
-    mediana = float(match["mediana_min"].median()) if len(match) else 0
-    media = (match["media_min"] * match["matches"]).sum() / match["matches"].sum() if len(match) else 0
+    mediana, media = geral["mediana_min"], geral["media_min"]
     c = st.columns(4)
     c[0].metric("Alimento salvo", f"{br(kg / 1000, 1)} t", help="Soma do peso dos lotes com entrega confirmada")
     c[1].metric("Refeições geradas", br(refeicoes), help="kg × fator por categoria (WRAP 420 g; TACO ÷ 700 kcal/PAT)")
     c[2].metric("Taxa de descarte", pct(descarte), help="Lotes aceitos que se perderam (meta < 20%)")
-    c[3].metric("Tempo mediano até o match", f"{br(mediana, 0)} min",
-                help="Cadastro → aceite da ONG (mediana das prioridades). A média geral é puxada pelos lotes BAIXA, "
+    c[3].metric("Tempo mediano até o match", f"{br(mediana, 1)} min",
+                help="Cadastro → aceite da ONG (mediana de todos os matches). A média geral é puxada pelos lotes BAIXA, "
                      "que podem esperar horas")
     c[3].caption(f"média geral: {br(media, 0)} min · CRÍTICA primeiro")
 
