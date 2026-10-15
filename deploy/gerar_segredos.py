@@ -1,7 +1,7 @@
 """Gera um .env com segredos novos (HMAC, chave RSA da declaração, chaves de API) para o Compose.
 
-Os valores vão SÓ para arquivos fora do Git (`.env`, `segredos/`), nunca para a tela. Para os
-Hugging Face Spaces, copie cada variável do .env para as Secrets do Space.
+Os valores vão SÓ para arquivos fora do Git (`.env`, `segredos/`), nunca para a tela. Para as
+plataformas de deploy, `deploy/preparar_publicacao.py` separa o que cada uma precisa.
 
 Uso:
     python deploy/gerar_segredos.py            # não sobrescreve um .env existente

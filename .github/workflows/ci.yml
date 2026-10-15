@@ -1,6 +1,7 @@
 # Pipeline DevSecOps da Rede Alimenta IA (SDD §8)
-#   testes → SAST (Bandit) → build das imagens + Trivy (imagens, dependências, Dockerfile) → security gate → deploy
-# O deploy nos Hugging Face Spaces só acontece em push na main E com o gate aprovado.
+#   testes → SAST (Bandit) → build das imagens + Trivy (imagens, dependências, Dockerfile) → security gate → deploy (Render)
+# O deploy no Render só acontece em push na main E com o gate aprovado (o dashboard no Streamlit
+# Community Cloud lê só o banco e os relatórios versionados).
 name: CI DevSecOps
 
 on:
@@ -132,22 +133,18 @@ jobs:
           path: reports/sast/resumo.json
 
   deploy:
-    name: Deploy nos Hugging Face Spaces
+    name: Deploy da API no Render
     needs: gate
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.HF_USUARIO != ''
+    # Só na main e só com o gate aprovado. No Render, o "Auto-Deploy" fica DESLIGADO: quem publica é
+    # este job, chamando o Deploy Hook (URL secreta) depois que testes, Bandit e Trivy passaram.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 5
     environment: producao
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
-        with:
-          name: resumo-seguranca
-          path: reports/sast
-      - name: Publicar API e dashboard
+      - name: Acionar o deploy no Render
         env:
-          HF_TOKEN: ${{ secrets.HF_TOKEN }}
-          HF_USUARIO: ${{ vars.HF_USUARIO }}
+          RENDER_DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
         run: |
-          pip install huggingface_hub==1.32.0
-          python deploy/publicar_hf.py
+          if [ -z "$RENDER_DEPLOY_HOOK" ]; then echo "RENDER_DEPLOY_HOOK não configurado: deploy pulado."; exit 0; fi
+          curl -fsS -X POST "$RENDER_DEPLOY_HOOK" > /dev/null && echo "Deploy solicitado ao Render."

@@ -1,0 +1,15 @@
+# Streamlit Community Cloud lê o requirements.txt da pasta do app. ESPELHO de requirements/base.txt +
+# requirements/dashboard.txt (tests/test_requirements.py garante que não divergem).
+pandas==3.0.6
+numpy==2.5.3
+pyshp==3.1.6
+scikit-learn==1.9.1
+joblib==1.6.0
+pydantic==2.13.5
+cryptography==50.0.2
+fpdf2==2.8.9
+httpx==0.28.1
+streamlit==1.65.0
+plotly==7.1.0
+pydeck==0.9.3
+psycopg[binary]==3.3.6

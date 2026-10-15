@@ -6,8 +6,8 @@ Plataforma com **IA e DevSecOps** que conecta, em tempo real, doadores de alimen
 
 | | Link |
 |---|---|
-| **API pública (Swagger)** | `https://<usuario-hf>-rede-alimenta-api.hf.space/docs` |
-| **Dashboard público** | `https://<usuario-hf>-rede-alimenta-dashboard.hf.space` |
+| **API pública (Swagger)** | `https://rede-alimenta-api.onrender.com/docs` (Render) |
+| **Dashboard público** | `https://<app>.streamlit.app` (Streamlit Community Cloud) |
 | **Pipeline CI/CD** | aba *Actions* deste repositório (testes → Bandit → Trivy → security gate → deploy) |
 
 ---
@@ -76,9 +76,9 @@ rede-alimenta-ia/
 ├── reports/             métricas dos modelos, NLP, observabilidade · sast/ = Bandit e Trivy
 ├── models/              metadados dos modelos (o .joblib é gerado no treino, fora do Git)
 ├── requirements/        dependências por container: base · api · ia · dashboard · dev
-├── deploy/              scripts: segredos locais, senhas do banco, publicação no Hugging Face
+├── deploy/              scripts: segredos locais, senhas do banco, segredos por plataforma
 ├── .github/             pipeline CI/CD (workflows/) e Dependabot
-├── Dockerfile           imagens: api · inferencia · dashboard · completo
+├── Dockerfile           imagens: api · inferencia · dashboard · render (último = URL pública)
 ├── docker-compose.yml   ambiente local endurecido (+ PostgreSQL local no perfil banco-local)
 ├── requirements.txt     ambiente completo (inclui os de requirements/)
 └── .env.exemplo         modelo dos segredos (o .env real nunca vai para o Git)
@@ -149,15 +149,23 @@ bandit -r src -f json -o reports/sast/bandit.json && python -m src.seguranca.rel
 | SAST | **Bandit** no código | (vai para o gate) |
 | Imagens | build das 3 imagens + **Trivy** (CVEs nas imagens, dependências e configuração do Dockerfile/Compose) | (vai para o gate) |
 | Security gate | `src/seguranca/relatorio_sast.py --gate` | houver achado **ALTO/CRÍTICO** aberto |
-| Deploy | publica API e dashboard nos Hugging Face Spaces | o gate reprovar ou não for a `main` |
+| Deploy | aciona o Deploy Hook do Render (API) | o gate reprovar ou não for a `main` |
 
 Dependabot abre PRs semanais de atualização (pip, Docker, Actions), que passam pelo mesmo gate.
 
-## Deploy (Hugging Face Spaces + Supabase)
+## Deploy (Render + Streamlit Community Cloud + Supabase)
 
-1. **Supabase:** crie o projeto e rode `python -m src.db.carregar` com `REDE_ALIMENTA_DB_ADMIN_URL` (conexão do dono, só na sua máquina). No SQL Editor, defina as senhas dos papéis: `ALTER ROLE rede_api WITH LOGIN PASSWORD '...'` e `ALTER ROLE rede_dashboard WITH LOGIN PASSWORD '...'`.
-2. **GitHub:** em *Settings → Secrets and variables → Actions*, crie o secret `HF_TOKEN` (token de escrita do Hugging Face) e a variável `HF_USUARIO`. Crie o environment `producao`.
-3. **Spaces:** depois do primeiro deploy, configure as *Secrets* de cada Space: API → `REDE_ALIMENTA_AMBIENTE=producao`, chaves HMAC, `REDE_ALIMENTA_CHAVE_DECLARACAO_PEM`, `REDE_ALIMENTA_CHAVES_API`, `REDE_ALIMENTA_DATABASE_URL` (papel `rede_api`); dashboard → `REDE_ALIMENTA_DASHBOARD_DB_URL` (papel `rede_dashboard`) e `REDE_ALIMENTA_API_PUBLICA`.
+| Parte | Onde | Observação |
+|---|---|---|
+| Banco | **Supabase** | `python -m src.db.carregar` (dono, só na sua máquina) e `python deploy/configurar_banco.py` (senhas dos papéis `rede_api` e `rede_dashboard`, gravadas no `.env`) |
+| API | **Render** (Docker, plano grátis) | Constrói o último estágio do Dockerfile (`render`): API + Modelos 1 e 2. O NLP fica **desligado** no público: o torch não cabe em 512 MB, e sem ele o doador escolhe a categoria (regras 4.4). No Compose, o NLP roda isolado |
+| Dashboard | **Streamlit Community Cloud** | `src/dashboard/app.py`, Python 3.12, dependências em `src/dashboard/requirements.txt` |
+
+1. `python deploy/preparar_publicacao.py https://<sua-api>.onrender.com` gera `segredos/render.env` e `segredos/streamlit-secrets.toml` (fora do Git), cada um só com o que a plataforma precisa.
+2. **Render:** *New → Web Service*, conecte o repositório, runtime Docker, plano Free, *Environment → Add from .env* com o conteúdo de `render.env`. Em *Settings*, desligue o *Auto-Deploy* e copie o *Deploy Hook* para o secret `RENDER_DEPLOY_HOOK` do GitHub: assim, **só o pipeline aprovado publica**.
+3. **Streamlit Cloud:** *Create app*, repositório e branch `main`, arquivo `src/dashboard/app.py`, em *Advanced settings* Python 3.12 e os *Secrets* de `streamlit-secrets.toml`.
+
+O plano grátis do Render "dorme" após 15 min sem acesso: abra a API 1–2 min antes da apresentação.
 
 ## Documentação
 
@@ -184,4 +192,4 @@ Dependabot abre PRs semanais de atualização (pip, Docker, Actions), que passam
 
 - [x] **CP1: MVP de IA** · dataset estruturado · modelos locais · Matriz STRIDE
 - [x] **CP2: DevSecOps** · Dockerfile + Compose · GitHub Actions · Bandit + Trivy · security gate
-- [x] **CP3: Deploy e impacto** · API FastAPI · dashboard Streamlit · Supabase · Hugging Face Spaces · LGPD · pitch
+- [x] **CP3: Deploy e impacto** · API FastAPI · dashboard Streamlit · Supabase · Render + Streamlit Cloud · LGPD · pitch

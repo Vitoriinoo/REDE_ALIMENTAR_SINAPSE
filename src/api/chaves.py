@@ -1,5 +1,5 @@
 """Gera chaves de API para a demonstração: as chaves em claro vão para `segredos/` (fora do Git) e
-o JSON com os SHA-256 vai para a variável `REDE_ALIMENTA_CHAVES_API` (segredo do HF Space).
+o JSON com os SHA-256 vai para a variável `REDE_ALIMENTA_CHAVES_API` (segredo da plataforma de deploy).
 
 Uso:
     python -m src.api.chaves doador:D-0008 doador:D-0211 ong:O-005 admin:A-01

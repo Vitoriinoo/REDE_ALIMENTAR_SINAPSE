@@ -4,7 +4,7 @@
 #   api         FastAPI, sem torch e sem modelos: decide com as regras e chama a inferência
 #   inferencia  só os modelos (M1, M2, NLP); sem segredos; no Compose, rede interna sem saída
 #   dashboard   Streamlit, só lê visões agregadas
-#   completo    API + modelos no mesmo processo (Hugging Face Space da API, que é um container só)
+#   render      API + Modelos 1 e 2 no mesmo processo, sem torch (URL pública no Render, 512 MB)
 # Build:  docker build --target api -t rede-alimenta/api .     (ou: docker compose build)
 # =============================================================================================
 ARG PYTHON=python:3.12-slim-bookworm
@@ -13,7 +13,7 @@ FROM ${PYTHON} AS base
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1 PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PIP_ROOT_USER_ACTION=ignore
 # Atualiza os pacotes do SO (correções de CVE que o Trivy cobra) e cria o usuário sem privilégios
-# (UID 1000: o Hugging Face Spaces roda o container com esse UID).
+# (UID 1000, sem shell de login).
 RUN apt-get update && apt-get upgrade -y --no-install-recommends && rm -rf /var/lib/apt/lists/* \
     && useradd --create-home --uid 1000 --shell /usr/sbin/nologin app
 WORKDIR /app
@@ -81,14 +81,20 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
     CMD python -c "import os, urllib.request; urllib.request.urlopen(f'http://127.0.0.1:{os.environ[\"PORT\"]}/_stcore/health', timeout=4)"
 CMD ["sh", "-c", "streamlit run src/dashboard/app.py --server.port ${PORT} --server.address 0.0.0.0"]
 
-# --- completo (HF Space da API: um container só, porta 7860) -------------------------------
-FROM inferencia-build AS completo
+# --- render (URL pública: plano grátis do Render, 512 MB) -----------------------------------
+# ÚLTIMO estágio de propósito: o Render constrói o último. API + Modelos 1 e 2 no mesmo processo,
+# SEM torch: o NLP (embeddings) não cabe em 512 MB e fica desligado no público. Sem ele, o doador
+# escolhe a categoria e a regra segue valendo (regras 4.4); no Compose o NLP roda isolado.
+FROM base AS render
 COPY requirements/api.txt requirements/api.txt
-RUN pip install -r requirements/api.txt && python -m pip uninstall -y pip
+RUN pip install -r requirements/api.txt
+COPY src/ src/
 COPY data/processed/ data/processed/
 COPY db/ db/
-RUN mkdir -p var && chown app:app var
+# Modelos treinados no build a partir do dataset versionado (SHA-256 nos metadados, conferido no load).
+RUN mkdir -p models reports var && python -m src.models.treinar > /dev/null \
+    && python -m pip uninstall -y pip && chown app:app var
+ENV REDE_ALIMENTA_NLP=0 REDE_ALIMENTA_IA_DESLIGADOS=nlp PORT=10000
 USER app
-ENV PORT=7860
-EXPOSE 7860
+EXPOSE 10000
 CMD ["sh", "-c", "uvicorn src.api.app:app --host 0.0.0.0 --port ${PORT} --no-server-header --proxy-headers"]

@@ -217,7 +217,7 @@ Classificação, base legal, retenção e dono de **cada coluna**: `src/governan
 | D9 | Impasse "só entrega × só busca" **bloqueado** (hub como única saída); redundante **proibido** com alternativa | Preferência no score (v2.0) | Checklist do professor. A v2.0 tratava como preferência porque o modelo de dados não separava capacidade de restrição; a v2.1 separa e cumpre. Custo medido e mostrado (regras 6.6) |
 | D10 | **Inferência em container próprio** (rede interna, sem segredo, só leitura) | Modelo no processo da API | Checklist item 8: um pickle malicioso ou uma falha na IA não alcança segredos, banco nem internet. A `ControleIA` continua na API (decisão fora do modelo) |
 | D11 | `NUMERIC` em todo número no banco, `Decimal` no caixa | `INTEGER`/`FLOAT` | Checklist item 14 + erro clássico de dinheiro em ponto flutuante |
-| D12 | Deploy em **Hugging Face Spaces** (2 Spaces) | Render grátis | 512 MB do Render não comportam torch + modelos; HF dá 16 GB. No Space da API, a inferência roda no mesmo container (risco residual documentado: no Compose ela é isolada) |
+| D12 | Deploy público grátis: **API no Render** (M1 + M2, NLP desligado) e **dashboard no Streamlit Community Cloud** | Hugging Face Spaces | O HF passou a cobrar (PRO) por Spaces Docker. No Render (512 MB) o torch não cabe: o NLP fica desligado pelo interruptor e o doador escolhe a categoria; M1 e M2 rodam no processo da API (risco residual: no Compose a inferência é isolada) |
 
 ## 8. Implantação (CP2/CP3)
 
@@ -227,17 +227,18 @@ flowchart LR
     DEV --> B[Bandit SAST]
     DEV --> I[Build das 3 imagens<br/>Trivy: imagens, deps, Dockerfile]
     T & B & I --> G{Security gate<br/>0 ALTO/CRÍTICO aberto}
-    G -- aprovado + main --> HF[Hugging Face Spaces<br/>API e dashboard]
+    G -- aprovado + main --> RD[Render: API<br/>via Deploy Hook]
     G -- reprovado --> X[pipeline falha]
-    HF --> SB[(Supabase<br/>rede_api / rede_dashboard)]
+    RD --> SB[(Supabase<br/>rede_api / rede_dashboard)]
+    ST[Streamlit Cloud: dashboard] --> SB
 ```
 
 | Ambiente | Composição | Isolamento da IA |
 |---|---|---|
 | **Local / avaliação** (`docker compose up`) | `api` + `inferencia` + `dashboard` (+ `postgres` no perfil `banco-local`) | `inferencia` só na rede `interna` (`internal: true`: sem internet, sem porta publicada), sem `env_file`, `read_only`, `cap_drop: ALL`, limite de memória |
-| **Público** (HF Spaces) | Space `rede-alimenta-api` (alvo `completo`: API + modelos) e Space `rede-alimenta-dashboard` | Modelos no mesmo container da API (D12). Mitigação: artefato com SHA-256, modelo HF offline e fixado por commit, IA sem agência |
+| **Público** | Render (alvo `render`: API + M1 + M2, NLP desligado) e Streamlit Community Cloud (dashboard, só o papel de leitura) | M1/M2 no processo da API (D12). Mitigação: artefato com SHA-256 conferido no load, IA sem agência, interruptor por modelo |
 
-- **Segredos** (`REDE_ALIMENTA_*`): HMAC de documento, pseudônimo e log; chave RSA da declaração; hashes das chaves de API; URLs do banco. Em produção (`REDE_ALIMENTA_AMBIENTE=producao`) a aplicação **não sobe** sem eles. Ficam no `.env` local (fora do Git) e nas *Secrets* dos Spaces.
+- **Segredos** (`REDE_ALIMENTA_*`): HMAC de documento, pseudônimo e log; chave RSA da declaração; hashes das chaves de API; URLs do banco. Em produção (`REDE_ALIMENTA_AMBIENTE=producao`) a aplicação **não sobe** sem eles. Ficam no `.env` local (fora do Git) e nas variáveis/Secrets de cada plataforma, que recebe só o que usa (`deploy/preparar_publicacao.py`).
 - **Modelos** são construídos no build da imagem a partir do dataset versionado, e o SHA-256 vai para os metadados conferidos antes do `joblib.load`.
 
 ## 9. Rastreabilidade: requisito → código → teste
