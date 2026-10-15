@@ -14,12 +14,14 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+from urllib.parse import urlsplit
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))  # `streamlit run` não põe a raiz no path
 
 import streamlit as st
 
 from src.dashboard.cliente_api import ErroAPI, chamar
+from src.dashboard.dados import API_INTERNA
 
 st.set_page_config(page_title="Rede Alimenta IA", layout="wide")
 st.markdown(
@@ -54,7 +56,13 @@ with st.sidebar:
                 try:
                     quem = chamar("GET", "/v1/eu", chave)
                 except ErroAPI as e:
-                    st.error("Chave inválida." if e.status == 401 else e.mensagem)
+                    if e.status == 401:
+                        # Diagnóstico sem expor a chave: formato e tamanho (as chaves geradas têm ra_<papel>_ + 32).
+                        dica = ("ela deve começar com ra_" if not chave.startswith("ra_")
+                                else f"recebida com {len(chave)} caracteres; confira se copiou inteira")
+                        st.error(f"Chave inválida: {dica}.")
+                    else:
+                        st.error(e.mensagem)
                 else:
                     # O papel continua vindo da CHAVE (a API decide); a escolha só evita entrar no perfil errado.
                     if quem["papel"] != escolhido:
@@ -63,6 +71,7 @@ with st.sidebar:
                         st.session_state["ident"], st.session_state["chave"] = quem, chave
                         st.rerun()
         st.caption("Sem chave, só o painel público fica disponível.")
+    st.caption(f"API: {urlsplit(API_INTERNA).netloc or API_INTERNA}")
 
 papel = (st.session_state.get("ident") or {}).get("papel")
 paginas = [st.Page("paginas/painel.py", title="Painel de impacto", default=True)]
