@@ -198,3 +198,31 @@ def corridas_transportador(tid: str) -> pd.DataFrame:
 def relatorio(nome: str) -> dict | None:
     caminho = RAIZ / "reports" / nome
     return json.loads(caminho.read_text(encoding="utf-8")) if caminho.exists() else None
+
+
+def resumo_banca() -> dict:
+    """Consolida os 5 indicadores principais exigidos pela banca para a apresentação.
+
+    Retorna os valores oficiais extraídos do impacto regional, tempo de match,
+    métricas de modelos e relatórios SAST, sem alterar nenhuma regra de negócio.
+    """
+    reg = impacto_regiao()
+    ger = match_geral()
+    met = relatorio("metricas_modelos.json") or {}
+    sast = relatorio("sast/resumo.json") or {}
+
+    ba = sast.get("bandit", {}).get("antes", {})
+    bd = sast.get("bandit", {}).get("depois", {})
+    trivy = sast.get("trivy", {})
+    achados_antes = sum(ba.values()) + sum(sum(t.get("antes", {}).values()) for t in trivy.values())
+    achados_depois = sum(bd.values()) + sum(sum(t.get("depois", {}).values()) for t in trivy.values())
+
+    return {
+        "kg_salvos": float(reg["kg_salvos"].sum()),
+        "refeicoes": float(reg["refeicoes"].sum()),
+        "acuracia_ia": float(met.get("modelo_1_prioridade", {}).get("teste", {}).get("acuracia", 0.0)),
+        "tempo_tipico_min": float(ger.get("mediana_min", 0.0)),
+        "media_match_min": float(ger.get("media_min", 0.0)),
+        "vulnerabilidades_mitigadas": max(achados_antes - achados_depois, 0),
+    }
+

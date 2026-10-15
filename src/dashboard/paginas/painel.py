@@ -10,8 +10,8 @@ import streamlit as st
 from html import escape
 
 from src.dashboard import dados
-from src.dashboard.tema import (BORDA, COR_PRIORIDADE, LARANJA, MUDO, STATUS, TINTA, TINTA_2, VERDE, aplicar_tema,
-                                cabecalho, cartao, selo_prioridade)
+from src.dashboard.tema import (BORDA, COR_PRIORIDADE, LARANJA, MUDO, STATUS, TINTA, TINTA_2, VERDE, VERDE_CLARO,
+                                aplicar_tema, cabecalho, cartao, selo_prioridade)
 from src.seguranca.stride import AMEACAS, nivel
 
 # --- Paleta dos gráficos: série principal verde (alimento salvo), comparação laranja, sequencial verde ---
@@ -53,6 +53,95 @@ regioes, mes, match, calor, geral = carregar()
 metricas = dados.relatorio("metricas_modelos.json") or {}
 sast = dados.relatorio("sast/resumo.json") or {}
 
+# Dados consolidados para o Resumo da banca
+resumo = dados.resumo_banca()
+kg_total = resumo["kg_salvos"]
+refeicoes_total = resumo["refeicoes"]
+acuracia_ia = resumo["acuracia_ia"]
+tempo_tipico_match = resumo["tempo_tipico_min"]
+mitigadas_total = resumo["vulnerabilidades_mitigadas"]
+
+
+def cartao_banca(titulo: str, valor: str, frase: str, aba_nome: str) -> None:
+    """Cartão grande com número destacado, frase simples e aba onde o detalhe aparece."""
+    corpo = (
+        f"<div style='font-size: 1.85rem; font-weight: 700; color: {VERDE}; margin: 0.2rem 0 0.35rem'>"
+        f"{escape(valor)}</div>"
+        f"<div style='color: {TINTA_2}; font-size: 0.86rem; line-height: 1.35; min-height: 2.7rem'>"
+        f"{escape(frase)}</div>"
+        f"<div style='margin-top: 0.5rem; font-size: 0.78rem; font-weight: 600; color: {MUDO}'>"
+        f"Detalhe na aba: <span style='color: {VERDE}'>{escape(aba_nome)}</span></div>"
+    )
+    cartao(titulo, corpo)
+
+
+st.subheader("Resumo para a banca")
+cb1, cb2, cb3, cb4, cb5 = st.columns(5)
+with cb1:
+    cartao_banca(
+        "Alimentos salvos",
+        f"{br(kg_total / 1000, 1)} t",
+        "Comida própria para consumo resgatada do desperdício.",
+        "Impacto social",
+    )
+with cb2:
+    cartao_banca(
+        "Refeições geradas",
+        br(refeicoes_total),
+        "Refeições distribuídas nas 15 regiões atendidas.",
+        "Impacto social",
+    )
+with cb3:
+    cartao_banca(
+        "Acurácia da IA",
+        pct(acuracia_ia),
+        "Acerto na priorização de atendimento dos lotes.",
+        "Qualidade da IA",
+    )
+with cb4:
+    cartao_banca(
+        "Tempo típico de match",
+        f"{br(tempo_tipico_match, 1)} min",
+        "Tempo típico (mediana) entre cadastro e aceite da ONG.",
+        "Impacto social",
+    )
+with cb5:
+    cartao_banca(
+        "Vulnerabilidades mitigadas",
+        br(mitigadas_total),
+        "Falhas de segurança eliminadas no código e imagens (22 para 0).",
+        "Segurança",
+    )
+
+st.markdown(
+    f"<div class='ra-cartao' style='background:{VERDE_CLARO};border-color:{BORDA};margin-top:.3rem;margin-bottom:.8rem'>"
+    f"<strong style='color:{TINTA}'>Formatos da avaliação exigidos pela banca:</strong>"
+    f"<div style='margin-top:.4rem;display:grid;grid-template-columns:repeat(auto-fit, minmax(260px, 1fr));gap:.6rem;color:{TINTA_2};font-size:.88rem'>"
+    f"<div><strong>Gráficos dinâmicos:</strong> na aba <em>Ao vivo</em> (pulsação da rede com atualização automática a cada 20 s) e na aba <em>Impacto social</em> (evolução mensal interativa).</div>"
+    f"<div><strong>Mapa de calor:</strong> na aba <em>Impacto social</em> (onde as refeições chegaram, grade geográfica de ~1 km).</div>"
+    f"<div><strong>Indicadores de segurança:</strong> na aba <em>Segurança</em> (auditoria SAST Bandit + Trivy antes e depois, matriz STRIDE e security gate).</div>"
+    f"</div></div>",
+    unsafe_allow_html=True,
+)
+
+with st.expander("Entregáveis do projeto (10 itens do enunciado)", expanded=False):
+    st.markdown(
+        """
+| Entregável | O que é (em linguagem simples) | Onde está no repositório |
+|---|---|---|
+| **1. Dataset** | Base de 24 mil lotes de doação calibrada com fontes públicas (IPVS/SEADE, TACO, PAT e WRAP) | [`data/processed/`](https://github.com/Vitoriinoo/REDE_ALIMENTAR_SINAPSE/tree/main/data/processed) e [`data/reference/`](https://github.com/Vitoriinoo/REDE_ALIMENTAR_SINAPSE/tree/main/data/reference) |
+| **2. Modelo local** | Modelos de IA treinados localmente (M1 prioridade de atendimento e M2 risco de descarte) | [`src/models/`](https://github.com/Vitoriinoo/REDE_ALIMENTAR_SINAPSE/tree/main/src/models) e [métricas](https://github.com/Vitoriinoo/REDE_ALIMENTAR_SINAPSE/blob/main/reports/metricas_modelos.json) |
+| **3. STRIDE** | Matriz de riscos e ameaças com 34 cenários avaliados por Probabilidade e Impacto com reteste | [`docs/stride/matriz-stride.md`](https://github.com/Vitoriinoo/REDE_ALIMENTAR_SINAPSE/blob/main/docs/stride/matriz-stride.md) e [planilha](https://github.com/Vitoriinoo/REDE_ALIMENTAR_SINAPSE/blob/main/docs/stride/matriz-stride.xlsx) |
+| **4. Dockerfile + Compose** | Containers isolados para API, inferência e painel, com imagens seguras sem usuário root | [`Dockerfile`](https://github.com/Vitoriinoo/REDE_ALIMENTAR_SINAPSE/blob/main/Dockerfile) e [`docker-compose.yml`](https://github.com/Vitoriinoo/REDE_ALIMENTAR_SINAPSE/blob/main/docker-compose.yml) |
+| **5. CI/CD GitHub Actions** | Pipeline automatizado que executa testes e varreduras de segurança a cada alteração de código | [`.github/workflows/ci.yml`](https://github.com/Vitoriinoo/REDE_ALIMENTAR_SINAPSE/blob/main/.github/workflows/ci.yml) |
+| **6. SAST Bandit + Trivy** | Relatórios de varredura estática de código e containers: 22 vulnerabilidades eliminadas (zero abertas) | [`reports/sast/`](https://github.com/Vitoriinoo/REDE_ALIMENTAR_SINAPSE/tree/main/reports/sast) e [resumo](https://github.com/Vitoriinoo/REDE_ALIMENTAR_SINAPSE/blob/main/reports/sast/resumo.json) |
+| **7. URL pública** | Sistema publicado na nuvem pública gratuita com documentação interativa da API e painel web | [Painel Streamlit](https://rede-alimenta-ia.streamlit.app/) e [API Render](https://rede-alimenta-ia-api-d5dk.onrender.com/docs) ([README](https://github.com/Vitoriinoo/REDE_ALIMENTAR_SINAPSE/blob/main/README.md)) |
+| **8. Banco Supabase** | Banco PostgreSQL na nuvem com separação de papéis por menor privilégio e auditoria imutável | [`db/schema.sql`](https://github.com/Vitoriinoo/REDE_ALIMENTAR_SINAPSE/blob/main/db/schema.sql) e [script de carga](https://github.com/Vitoriinoo/REDE_ALIMENTAR_SINAPSE/blob/main/src/db/carregar.py) |
+| **9. README** | Documentação técnica completa com arquitetura, instruções de execução e evidências de entrega | [`README.md`](https://github.com/Vitoriinoo/REDE_ALIMENTAR_SINAPSE/blob/main/README.md) |
+| **10. Pitch** | Estrutura da apresentação em sala com 12 tópicos cobrindo impacto social, IA e DevSecOps | [Seção Pitch no README](https://github.com/Vitoriinoo/REDE_ALIMENTAR_SINAPSE/blob/main/README.md#apresenta%C3%A7%C3%A3o-e-defesa-pitch) e [CONTEXTO §3.2](https://github.com/Vitoriinoo/REDE_ALIMENTAR_SINAPSE/blob/main/CONTEXTO.md#32-entreg%C3%A1veis--arquivo--situa%C3%A7%C3%A3o) |
+"""
+    )
+
 aba_impacto, aba_ia, aba_seg, aba_vivo = st.tabs(["Impacto social", "Qualidade da IA", "Segurança", "Ao vivo"])
 
 # ============================== IMPACTO ==============================
@@ -65,13 +154,14 @@ with aba_impacto:
     c[0].metric("Alimento salvo", f"{br(kg / 1000, 1)} t", help="Soma do peso dos lotes com entrega confirmada")
     c[1].metric("Refeições geradas", br(refeicoes), help="kg × fator por categoria (WRAP 420 g; TACO ÷ 700 kcal/PAT)")
     c[2].metric("Taxa de descarte", pct(descarte), help="Lotes aceitos que se perderam (meta < 20%)")
-    c[3].metric("Tempo mediano até o match", f"{br(mediana, 1)} min",
-                help="Cadastro → aceite da ONG (mediana de todos os matches). A média geral é puxada pelos lotes BAIXA, "
+    c[3].metric("Tempo típico até o match", f"{br(mediana, 1)} min",
+                help="Cadastro até o aceite da ONG (mediana de todos os matches). A média geral é puxada pelos lotes BAIXA, "
                      "que podem esperar horas")
-    c[3].caption(f"média geral: {br(media, 0)} min · CRÍTICA primeiro")
+    c[3].caption(f"mediana: {br(mediana, 1)} min · média geral: {br(media, 0)} min · CRÍTICA primeiro")
 
     esq, dir_ = st.columns([3, 2])
     with esq:
+        st.caption("Mapa de calor da carência atendida: concentração de refeições onde a comida chegou (grade de ~1 km).")
         fig = px.density_map(calor, lat="lat", lon="lon", z="refeicoes", radius=30, zoom=9.2, opacity=0.8,
                              center={"lat": -23.58, "lon": -46.60}, map_style="carto-positron",
                              color_continuous_scale=SEQ_VERDE, hover_data={"kg_salvos": ":,.0f", "refeicoes": ":,.0f"},
@@ -79,6 +169,7 @@ with aba_impacto:
         fig.update_coloraxes(colorbar=dict(title="refeições", thickness=10))
         st.plotly_chart(layout(fig, 460), use_container_width=True)
     with dir_:
+        st.caption("Distribuição por região e índice de vulnerabilidade social IPVS.")
         r = regioes.sort_values("refeicoes")
         fig = px.bar(r, x="refeicoes", y="regiao", orientation="h", color="indice_vulnerabilidade",
                      color_continuous_scale=SEQ_VERDE, range_color=(0, 1),
@@ -91,6 +182,7 @@ with aba_impacto:
 
     m = mes[mes["origem"] == "simulacao"].groupby("mes", as_index=False)[["refeicoes", "kg_salvos", "lotes_aceitos", "descartados"]].sum()
     m["taxa_descarte"] = m["descartados"] / m["lotes_aceitos"]
+    st.caption("Gráficos dinâmicos de evolução mensal: acompanhamento mês a mês das refeições e da taxa de descarte.")
     a, b = st.columns(2)
     with a:
         fig = px.line(m, x="mes", y="refeicoes", markers=True, title="Refeições por mês",
@@ -156,7 +248,7 @@ with aba_ia:
         ordem = ["CRITICA", "ALTA", "MEDIA", "BAIXA"]
         mp = match.set_index("prioridade").reindex(ordem).reset_index()
         fig = px.bar(mp, x="prioridade", y="mediana_min", text_auto=".0f",
-                     title="Tempo mediano até o match por prioridade (min)",
+                     title="Tempo típico até o match por prioridade (min)",
                      labels={"prioridade": "", "mediana_min": "minutos"},
                      hover_data={"media_min": ":.0f", "matches": ":,"})
         fig.update_traces(marker_color=VERDE, marker_line_color=FUNDO, marker_line_width=2,
@@ -177,6 +269,7 @@ with aba_ia:
 
 # ============================== SEGURANÇA ==============================
 with aba_seg:
+    st.caption("Indicadores de segurança: relatórios SAST (Bandit e Trivy), matriz STRIDE e security gate do pipeline CI/CD.")
     ba, bd = sast.get("bandit", {}).get("antes", {}), sast.get("bandit", {}).get("depois", {})
     trivy = sast.get("trivy", {})
     achados_antes = sum(ba.values()) + sum(sum(t["antes"].values()) for t in trivy.values())
@@ -251,7 +344,7 @@ with aba_seg:
 with aba_vivo:
     @st.fragment(run_every="20s")
     def ao_vivo():
-        st.caption("Lotes cadastrados pela API pública (atualiza a cada 20 s).")
+        st.caption("Gráficos dinâmicos e pulsação da rede: lotes cadastrados pela API pública ao vivo (atualização automática a cada 20 s).")
         r = dados.recentes()
         if r.empty:
             st.info("Nenhum lote ao vivo ainda. Cadastre um pelo Swagger da API: "
