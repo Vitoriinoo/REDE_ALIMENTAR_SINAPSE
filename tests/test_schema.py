@@ -66,6 +66,19 @@ def test_sem_senha_no_esquema():
     assert not re.search(r"PASSWORD", _sql_sem_comentarios(), flags=re.IGNORECASE)
 
 
+def test_contas_sem_dado_pessoal_em_claro_e_api_sem_update():
+    """Login real: e-mail e documento só como HMAC, senha só como scrypt; a API cria e lê, nunca altera."""
+    sql = _sql_sem_comentarios()
+    bloco = re.search(r"CREATE TABLE IF NOT EXISTS rede\.contas \((.*?)\n\);", sql, flags=re.S).group(1)
+    colunas = set(re.findall(r"^\s+(\w+)\s+(?:TEXT|UUID|TIMESTAMPTZ)", bloco, flags=re.M))
+    assert {"email_hash", "documento_hash", "senha_hash"} <= colunas
+    assert not colunas & {"email", "documento", "cpf", "cnpj", "senha"}
+    assert "GRANT SELECT, INSERT ON rede.contas TO rede_api" in sql
+    assert not re.search(r"GRANT[^;]*(UPDATE|DELETE)[^;]*rede\.contas", sql)
+    migracao = (SCHEMA.parent / "migracoes" / "2026-10-15_contas.sql").read_text(encoding="utf-8")
+    assert bloco in re.sub(r"--[^\n]*", "", migracao)  # migração e esquema não divergem
+
+
 # --- Integração (PostgreSQL real) --------------------------------------------------------------
 PG = os.environ.get("REDE_ALIMENTA_PG_TESTE")
 integracao = pytest.mark.skipif(not PG, reason="sem REDE_ALIMENTA_PG_TESTE (roda no CI com postgres:16)")
@@ -89,6 +102,21 @@ def conexao():
             VALUES ('DEC-1', 1, 'L-T1', '{}', repeat('a', 64), 'eA==', 'k1');
         """)
         yield c
+
+
+@integracao
+def test_api_cria_e_le_conta_mas_nao_altera(conexao):
+    psycopg = pytest.importorskip("psycopg")
+    h = "b" * 64
+    conexao.execute("SET ROLE rede_api")
+    try:
+        conexao.execute("INSERT INTO rede.contas (codigo, email_hash, senha_hash, papel, nome, documento_hash, status) "
+                        "VALUES ('O-T1', %s, 'scrypt$x', 'ong', 'ONG Teste', %s, 'ativa')", (h, h))
+        assert conexao.execute("SELECT status FROM rede.contas WHERE codigo = 'O-T1'").fetchone()[0] == "ativa"
+        with pytest.raises(psycopg.errors.InsufficientPrivilege):
+            conexao.execute("UPDATE rede.contas SET status = 'pendente' WHERE codigo = 'O-T1'")
+    finally:
+        conexao.execute("RESET ROLE")
 
 
 @integracao

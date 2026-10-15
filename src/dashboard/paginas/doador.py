@@ -7,19 +7,27 @@ API). A decisão (aceite, prioridade, ONG) é sempre da API: esta tela só colet
 from __future__ import annotations
 
 from datetime import date, datetime, time, timedelta, timezone
+from html import escape
 
 import pandas as pd
 import streamlit as st
 
 from src.dashboard.cliente_api import ErroAPI, chamar, traduzir
+from src.dashboard.tema import MUDO, STATUS, TINTA_2, VERDE, aplicar_tema, cabecalho, cartao, selo_prioridade
 from src.regras.dominio import Armazenamento, Categoria, TipoDoador
 from src.regras.questionario import PERGUNTAS, TEXTO_DECLARACAO, Alergenico, Origem, perguntas_aplicaveis
 
 BRASILIA = timezone(timedelta(hours=-3))
+aplicar_tema()
 ident, chave = st.session_state.get("ident") or {}, st.session_state.get("chave")
 if ident.get("papel") != "doador":
-    st.warning("Entre com uma chave de doador na barra lateral.")
+    st.warning("Entre com uma conta de doador para ver esta tela.")
     st.stop()
+if "tipo_doador" not in ident:  # o login por e-mail traz só papel, id e nome; o resto vem de /v1/eu
+    try:
+        ident = st.session_state["ident"] = ident | chamar("GET", "/v1/eu", chave)
+    except ErroAPI:
+        pass
 
 CATEGORIAS = {Categoria.PREPARADO: "Preparado (refeição pronta)", Categoria.REFRIGERADO: "Refrigerado",
               Categoria.CONGELADO: "Congelado", Categoria.HORTIFRUTI: "Hortifrúti", Categoria.PADARIA: "Padaria",
@@ -52,10 +60,38 @@ def agora() -> datetime:
     return datetime.now(BRASILIA).replace(second=0, microsecond=0)
 
 
+def horas_restantes(validade: datetime) -> str:
+    """Tempo até a validade efetiva calculada pela API, colorido (sem limite novo de horas)."""
+    resta = validade - datetime.now(BRASILIA)
+    horas = resta.total_seconds() / 3600
+    if horas <= 0:
+        return f"<span style='color:{STATUS['critico']};font-weight:600'>validade vencida</span>"
+    texto = f"{horas:.0f} h" if horas >= 1 else f"{resta.total_seconds() / 60:.0f} min"
+    cor = STATUS["critico"] if horas < 6 else STATUS["atencao"] if horas < 24 else VERDE
+    return f"<span style='color:{cor};font-weight:600'>restam {texto}</span> · vence {validade:%d/%m %H:%M}"
+
+
+def link_google_maps(item: dict) -> str | None:
+    """Link de rota quando a API mandar origem e destino com coordenadas (PLANO-TELAS, decisão 9)."""
+    try:
+        o = f"{float(item['origem_lat'])},{float(item['origem_lon'])}"
+        d = f"{float(item['destino_lat'])},{float(item['destino_lon'])}"
+    except (KeyError, TypeError, ValueError):
+        return None
+    return f"https://www.google.com/maps/dir/?api=1&origin={o}&destination={d}&travelmode=driving"
+
+
+def passo(numero: int, titulo: str, ajuda: str) -> None:
+    st.markdown(f"<div style='margin:1.2rem 0 .3rem'><span class='ra-selo' style='background:{VERDE}'>"
+                f"Passo {numero}</span> <b style='font-size:1.15rem'>{escape(titulo)}</b>"
+                f"<div style='color:{MUDO};font-size:.9rem'>{escape(ajuda)}</div></div>", unsafe_allow_html=True)
+
+
 tipo = TipoDoador(ident.get("tipo_doador", "PJ"))
-st.title("Doar alimentos")
-st.caption(f"Doador `{ident['id']}` · {'pessoa jurídica' if tipo == TipoDoador.PJ else 'pessoa física'} · "
-           f"{ident.get('segmento', '')} · {ident.get('regiao', '')}")
+detalhes = " · ".join(x for x in ("pessoa jurídica" if tipo == TipoDoador.PJ else "pessoa física",
+                                  ident.get("segmento"), ident.get("regiao")) if x)
+cabecalho(f"Olá, {ident.get('nome') or ident['id']}",
+          f"Obrigado por doar. Em quatro passos o seu alimento chega a uma ONG perto de você. ({detalhes})")
 if tipo == TipoDoador.PF:
     st.info("Pessoa física pode doar apenas **alimento não perecível lacrado** na embalagem original (regras 4.1).")
 
@@ -63,7 +99,7 @@ aba_doar, aba_meus = st.tabs(["Nova doação", "Minhas doações"])
 
 with aba_doar:
     # --- 1. Descrição + sugestão da IA ------------------------------------------------------
-    st.subheader("1. O que você quer doar?")
+    passo(1, "O que você quer doar?", "Conte com suas palavras; a IA sugere a categoria e você confere.")
     descricao = st.text_area("Descreva o lote com suas palavras", max_chars=500, key="descricao",
                              placeholder="Ex.: sobraram 20 marmitas de arroz, feijão e frango do almoço, estão na geladeira")
     if st.button("Pedir sugestão da IA", disabled=len(descricao.strip()) < 3):
@@ -81,7 +117,7 @@ with aba_doar:
         st.info(sug.get("mensagem", "Sem sugestão automática: escolha a categoria."))
 
     # --- 2. Confirmação da categoria e da validade -------------------------------------------
-    st.subheader("2. Confirme o alimento")
+    passo(2, "Confirme o alimento", "Categoria, onde está guardado, peso e validade.")
     lista_cat = list(CATEGORIAS)
     sugerida = Categoria(sug["sugestao"]["categoria"]) if sug and sug.get("sugestao") else None
     c1, c2, c3 = st.columns(3)
@@ -113,7 +149,7 @@ with aba_doar:
         datas["validade_informada"] = instante(a.date_input("Validade", venc.date(), format="DD/MM/YYYY"), time(23, 59))
 
     # --- 3. Questionário (só as perguntas que valem para esta categoria e este doador) -------
-    st.subheader("3. Questionário de segurança do alimento")
+    passo(3, "Segurança do alimento", "Só as perguntas que valem para este alimento. Leva menos de um minuto.")
     aplicaveis = perguntas_aplicaveis(categoria, tipo)
     sim_nao = {"Sim": True, "Não": False}
     r: dict = {}
@@ -141,7 +177,8 @@ with aba_doar:
         datas["disponivel_ate"] = instante(x.date_input("Disponível até (dia)", ate.date(), format="DD/MM/YYYY"),
                                            y.time_input("Disponível até (hora)", ate.time()))
 
-    if st.button("Cadastrar doação", type="primary", use_container_width=True):
+    passo(4, "Enviar", "A plataforma valida, calcula a prioridade e oferece o lote à ONG mais adequada.")
+    if st.button("Cadastrar doação", type="primary", width="stretch"):
         if len(descricao.strip()) < 3:
             st.error("Descreva o lote no passo 1.")
         elif faltando:
@@ -174,24 +211,30 @@ with aba_doar:
         else:
             ong = res["ong_ofertada"]
             st.success(f"**Doação aceita!** Ofertada à ONG **{ong['ong_id']}** ({ong['regiao']}).")
-            m = st.columns(4)
             p = res["prioridade"]
-            m[0].metric("Prioridade", p["valor"].replace("CRITICA", "CRÍTICA").replace("MEDIA", "MÉDIA"))
-            m[0].caption(f"decidida por: {FONTES.get(p['fonte'], p['fonte'])}")
             rd = res["risco_descarte"]
-            m[1].metric("Risco de descarte", "ALTO" if rd["alto"] else "normal",
-                        f"{rd['probabilidade']:.0%}" if rd.get("probabilidade") is not None else None, delta_color="off")
-            m[1].caption("Modelo 2: se alto, libera o entregador pago (caixa solidário)")
-            m[2].metric("Refeições estimadas", f"{res['refeicoes_estimadas']:.0f}")
-            m[3].metric("Validade calculada", validade.strftime("%d/%m %H:%M"))
-            st.markdown(f"**ONG da vez:** `{ong['ong_id']}` · {ong['km']:.1f} km · pode receber em "
-                        f"~{ong['minutos_ate_receber']:.0f} min · logística: "
-                        f"{'direta' if ong['modo'] == 'direto' else 'via hub (ponto de encontro)'}")
+            prob = f" ({rd['probabilidade']:.0%})" if rd.get("probabilidade") is not None else ""
+            cartao(f"Lote {res['codigo']}",
+                   f"<div style='margin:.35rem 0'>{selo_prioridade(p['valor'])} &nbsp;{horas_restantes(validade)}</div>"
+                   f"<div style='color:{TINTA_2}'>Prioridade decidida por: {escape(FONTES.get(p['fonte'], p['fonte']))}"
+                   f"<br>~{res['refeicoes_estimadas']:.0f} refeições estimadas · risco de descarte "
+                   f"<b>{'ALTO' if rd['alto'] else 'normal'}</b>{prob}</div>",
+                   sub="Modelo 2: risco alto libera o entregador pago (caixa solidário)")
+            logistica = "direta" if ong["modo"] == "direto" else "via hub (ponto de encontro)"
+            esq, dir_ = st.columns([3, 1], vertical_alignment="center")
+            with esq:
+                cartao(f"ONG da vez: {ong['ong_id']}",
+                       f"<div style='color:{TINTA_2}'>{ong['km']:.1f} km · pode receber em "
+                       f"~{ong['minutos_ate_receber']:.0f} min · logística {logistica}</div>",
+                       sub=f"{ong['regiao']} · ela tem a vez de aceitar ou recusar")
+            with dir_:
+                if url := link_google_maps(ong):
+                    st.link_button("Abrir no Google Maps", url, width="stretch")
             if res.get("alternativas"):
                 st.caption("Se ela recusar, a oferta passa para a próxima, nesta ordem:")
                 st.dataframe(pd.DataFrame(res["alternativas"])[["ong_id", "regiao", "score", "km",
                                                                 "minutos_ate_receber", "modo"]],
-                             hide_index=True, use_container_width=True)
+                             hide_index=True, width="stretch")
             if res.get("ongs_excluidas"):
                 with st.expander("Por que as outras ONGs ficaram de fora"):
                     for motivo, n in sorted(res["ongs_excluidas"].items(), key=lambda x: -x[1]):
@@ -214,9 +257,16 @@ with aba_meus:
         st.error(e.mensagem)
         lotes = pd.DataFrame()
     if lotes.empty:
-        st.info("Você ainda não cadastrou doações.")
+        st.info("Você ainda não cadastrou doações. Comece pela aba Nova doação.")
     else:
+        entregues = lotes[lotes["status_final"] == "ENTREGUE"]
+        c = st.columns(3)
+        c[0].metric("Doações", len(lotes))
+        c[1].metric("Entregues", len(entregues))
+        c[2].metric("Refeições", f"{pd.to_numeric(entregues['refeicoes'], errors='coerce').fillna(0).sum():.0f}")
         lotes["ts_cadastro"] = pd.to_datetime(lotes["ts_cadastro"], utc=True).dt.tz_convert(BRASILIA).dt.strftime(
             "%d/%m %H:%M")
+        lotes["prioridade"] = lotes["prioridade"].map(
+            lambda v: {"CRITICA": "CRÍTICA", "MEDIA": "MÉDIA"}.get(v, v))
         st.dataframe(lotes.rename(columns={"codigo": "lote", "ts_cadastro": "cadastro", "ong_codigo": "ONG",
-                                           "status_final": "situação"}), hide_index=True, use_container_width=True)
+                                           "status_final": "situação"}), hide_index=True, width="stretch")

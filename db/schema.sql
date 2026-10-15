@@ -110,6 +110,25 @@ CREATE TABLE IF NOT EXISTS rede.transportadores (
     lon           NUMERIC(9,6) NOT NULL
 );
 
+-- --- Contas do login (e-mail e senha). Nada pessoal em claro: e-mail e CPF/CNPJ só como HMAC-SHA256,
+--     senha só como scrypt. `codigo` liga a conta ao registro operacional (D-0008, O-005, V-001, A-01). -----
+CREATE TABLE IF NOT EXISTS rede.contas (
+    id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    codigo         TEXT NOT NULL UNIQUE,
+    email_hash     TEXT NOT NULL UNIQUE CHECK (email_hash ~ '^[0-9a-f]{64}$'),
+    senha_hash     TEXT NOT NULL CHECK (senha_hash LIKE 'scrypt$%'),
+    papel          TEXT NOT NULL CHECK (papel IN ('doador', 'ong', 'transportador', 'admin')),
+    nome           TEXT NOT NULL CHECK (length(nome) BETWEEN 2 AND 120),
+    documento_hash TEXT NOT NULL CHECK (documento_hash ~ '^[0-9a-f]{64}$'),
+    tipo_doador    TEXT CHECK (tipo_doador IN ('PF', 'PJ')),
+    veiculo        TEXT CHECK (veiculo IN ('moto', 'carro', 'utilitario')),
+    status         TEXT NOT NULL CHECK (status IN ('ativa', 'pendente')),
+    criado_em      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (papel, documento_hash),
+    CHECK ((papel = 'doador') = (tipo_doador IS NOT NULL)),
+    CHECK ((papel = 'transportador') = (veiculo IS NOT NULL))
+);
+
 -- --- Lotes: cadastro + desfecho -----------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS rede.lotes (
     id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -301,6 +320,8 @@ GRANT SELECT, INSERT ON rede.lotes, rede.eventos, rede.declaracoes, rede.registr
 GRANT UPDATE (prioridade, prioridade_fonte, risco_descarte, ong_codigo, ts_aceite_ong, minutos_ate_match,
               modo_logistico, excecao_redundante, modalidade, acionou_pago, status_final, motivo_descarte,
               ts_entrega, refeicoes, custo_caixa) ON rede.lotes TO rede_api;
+-- Contas: a API cria e lê; aprovar conta pendente ou trocar senha é ação do dono do banco (fora da API).
+GRANT SELECT, INSERT ON rede.contas TO rede_api;
 -- Nunca UPDATE/DELETE em declaração e registro (além do gatilho, que vale até para o dono).
 REVOKE UPDATE, DELETE, TRUNCATE ON rede.declaracoes, rede.registro_auditavel FROM rede_api;
 -- Dashboard: só as visões agregadas.
@@ -309,13 +330,13 @@ GRANT SELECT ON rede.vw_impacto_regiao, rede.vw_impacto_mensal, rede.vw_match_pr
 
 -- --- RLS: bloqueio por padrão; cada papel só enxerga o que a política libera ---------------------
 DO $$ DECLARE t TEXT; BEGIN
-    FOREACH t IN ARRAY ARRAY['regioes','doadores','ongs','hubs','transportadores','lotes','pedidos',
+    FOREACH t IN ARRAY ARRAY['regioes','doadores','ongs','hubs','transportadores','contas','lotes','pedidos',
                              'eventos','caixa_lancamentos','declaracoes','registro_auditavel'] LOOP
         EXECUTE format('ALTER TABLE rede.%I ENABLE ROW LEVEL SECURITY', t);
         EXECUTE format('DROP POLICY IF EXISTS api_le ON rede.%I', t);
         EXECUTE format('CREATE POLICY api_le ON rede.%I FOR SELECT TO rede_api USING (true)', t);
     END LOOP;
-    FOREACH t IN ARRAY ARRAY['lotes','eventos','declaracoes','registro_auditavel','caixa_lancamentos'] LOOP
+    FOREACH t IN ARRAY ARRAY['contas','lotes','eventos','declaracoes','registro_auditavel','caixa_lancamentos'] LOOP
         EXECUTE format('DROP POLICY IF EXISTS api_inclui ON rede.%I', t);
         EXECUTE format('CREATE POLICY api_inclui ON rede.%I FOR INSERT TO rede_api WITH CHECK (true)', t);
     END LOOP;

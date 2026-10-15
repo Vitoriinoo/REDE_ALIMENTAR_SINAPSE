@@ -27,7 +27,9 @@ from fastapi import Depends, FastAPI, HTTPException, Path as PathParam, Request
 from fastapi.responses import JSONResponse, Response
 
 from src.api import matching
-from src.api.autenticacao import Identidade, Papel, autenticado, exige, identificar
+from src.api.autenticacao import Identidade, Papel, autenticado, credencial, exige, identificar
+from src.api.contas import (CadastroRecusado, ContaPendente, Contas, CredencialInvalida, EntradaBloqueada,
+                            PedidoCadastro, PedidoLogin, RepositorioContasMemoria, RepositorioContasPostgres)
 from src.api.ia import montar_controle
 from src.api.repositorio import LoteNaoEncontrado, RepositorioMemoria, RepositorioPostgres
 from src.data.curadoria_ipvs import RAIZ
@@ -52,7 +54,9 @@ from src.seguranca.declaracao import (
 from src.seguranca.declaracao_pdf import gerar_pdf
 from src.seguranca.minimizacao import pseudonimo
 from src.seguranca.segredos import SegredoAusente, em_producao
+from src.seguranca.senhas import emitir_token, hmac_email
 from src.validacao.esquemas import CadastroLote, Entrada, Texto, _enum
+from src.validacao.receita import ConsultaBrasilAPI
 
 log = logging.getLogger("api")
 BRASILIA = timezone(timedelta(hours=-3))  # sem horário de verão desde 2019
@@ -84,6 +88,8 @@ class Estado:
     cadastro: matching.Cadastro
     chave_declaracao: object
     freio: Freio
+    contas: Contas
+    receita: object
 
 
 E = Estado()
@@ -116,6 +122,8 @@ def iniciar() -> None:
     E.repo = RepositorioPostgres(url) if url else RepositorioMemoria(DIR_VAR / "declaracoes")
     E.cadastro = matching.Cadastro(RAIZ / "data" / "processed")
     E.chave_declaracao = _chave_declaracao()
+    E.contas = Contas(RepositorioContasPostgres(url) if url else RepositorioContasMemoria(DIR_VAR / "contas.json"))
+    E.receita = ConsultaBrasilAPI()
 
     def _ao_mudar(acao, freio):
         E.registro.registrar(Trilha.AUDITORIA, componente="api.freio", acao=acao, ator="sistema", papel="sistema",
@@ -135,8 +143,8 @@ app = FastAPI(
     version=VERSAO_REGRAS,
     description=(
         "Conecta excedente de alimentos a ONGs na Grande São Paulo. A IA **recomenda** (prioridade, risco de "
-        "descarte, categoria a partir do texto) e as **regras no código decidem**. Autenticação: cabeçalho "
-        "`X-Chave-API`. Fonte: https://github.com/Vitoriinoo/REDE_ALIMENTAR_SINAPSE"),
+        "descarte, categoria a partir do texto) e as **regras no código decidem**. Autenticação: login com e-mail "
+        "e senha em `/v1/auth/login` e o token em `Authorization: Bearer`, ou chave de API em `X-Chave-API`. Fonte: https://github.com/Vitoriinoo/REDE_ALIMENTAR_SINAPSE"),
     lifespan=_ciclo,
 )
 
@@ -147,7 +155,7 @@ async def _controles(request: Request, chamar):
     correlacao = str(uuid.uuid4())
     token = correlacao_atual.set(correlacao)
     inicio = time.perf_counter()
-    chave = request.headers.get("x-chave-api")
+    chave = credencial(request.headers.get("x-chave-api"), request.headers.get("authorization"))
     sujeito = ("k:" + hashlib.sha256(chave.encode()).hexdigest()[:16]) if chave else (
         "ip:" + (request.client.host if request.client else "?"))
     try:
@@ -348,16 +356,55 @@ def _resumo_oferta(lote: dict, ong_id: str) -> dict:
             "refeicoes_estimadas": round(refeicoes(lote["categoria"], float(lote["peso_kg"])), 1)}
 
 
+@app.post("/v1/auth/cadastro", status_code=201, tags=["autenticação"])
+def criar_conta(corpo: PedidoCadastro) -> dict:
+    """Conta de doador, ONG ou transportador (admin não tem cadastro aberto).
+
+    ONG só com CNPJ válido e ativo na Receita; Receita fora do ar → conta `pendente`. CPF/CNPJ e
+    e-mail são guardados só como HMAC; a senha, só como scrypt."""
+    try:
+        conta = E.contas.cadastrar(corpo, E.receita)
+    except CadastroRecusado as e:
+        raise HTTPException(422, str(e)) from None
+    E.registro.registrar(Trilha.AUDITORIA, componente="api.contas", acao="CADASTRO_CONTA", ator=conta["codigo"],
+                         papel=conta["papel"], recurso=f"conta:{conta['codigo']}", detalhes={"status": conta["status"]})
+    return {"id": conta["codigo"], "papel": conta["papel"], "status": conta["status"]}
+
+
+@app.post("/v1/auth/login", tags=["autenticação"])
+def entrar(corpo: PedidoLogin) -> dict:
+    """E-mail e senha → token de sessão `ras_...` (8 h). O papel e o ID vêm da conta, nunca do pedido.
+    Erro genérico para e-mail ou senha errados; 5 falhas seguidas bloqueiam por 15 min (429)."""
+    recurso = f"conta:{hmac_email(corpo.email)[:16]}"
+    try:
+        conta = E.contas.entrar(corpo.email, corpo.senha)
+    except (CredencialInvalida, EntradaBloqueada, ContaPendente) as e:
+        status = {CredencialInvalida: 401, EntradaBloqueada: 429, ContaPendente: 403}[type(e)]
+        E.registro.registrar(Trilha.AUDITORIA, componente="api.contas", acao="LOGIN", ator="anonimo",
+                             papel="anonimo", recurso=recurso, resultado=Resultado.NEGADO,
+                             detalhes={"status": status})
+        raise HTTPException(status, str(e), headers={"Retry-After": "900"} if status == 429 else None) from None
+    token, expira = emitir_token(conta["papel"], conta["codigo"])
+    E.registro.registrar(Trilha.AUDITORIA, componente="api.contas", acao="LOGIN", ator=conta["codigo"],
+                         papel=conta["papel"], recurso=recurso)
+    return {"token": token, "papel": conta["papel"], "id": conta["codigo"], "nome": conta["nome"],
+            "expira_em": expira.isoformat()}
+
+
 @app.get("/v1/eu", tags=["sistema"])
 def quem_sou(ident: Identidade = Depends(autenticado)) -> dict:
-    """Quem é o dono da chave: as telas usam para mostrar só o que o papel pode fazer."""
+    """Quem é o dono da credencial: as telas usam para mostrar só o que o papel pode fazer."""
     corpo = {"papel": str(ident.papel), "id": ident.id}
     if ident.papel == Papel.DOADOR:
         try:
             d = E.cadastro.doadores.loc[ident.id]
             corpo |= {"tipo_doador": str(d.tipo_doador), "segmento": str(d.segmento), "regiao": str(d.regiao)}
         except KeyError:
-            raise HTTPException(403, "doador sem cadastro ativo") from None
+            # Conta nova ainda sem registro operacional: o tipo vem da conta; cadastrar lote fica para depois.
+            conta = E.contas.por_codigo(ident.id)
+            if conta is None:
+                raise HTTPException(403, "doador sem cadastro ativo") from None
+            corpo |= {"tipo_doador": conta["tipo_doador"], "cadastro_operacional": False}
     return corpo
 
 

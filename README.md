@@ -44,7 +44,7 @@ A comida sobra onde há comércio e a fome está na periferia. No recorte do pro
 | Matriz STRIDE | 34 ameaças · residual sem riscos altos ou críticos |
 | Observabilidade | 4 de 5 anomalias injetadas detectadas; alarmes falsos < 0,02% em dados normais |
 | Ciclo de feedback (RLHF adaptado) | atacante em quarentena (0 rótulos aceitos); o portão barrou um candidato que subia a média (80% → 89%) mas derrubava a classe crítica "preparado" (92% → 80%) |
-| Testes automatizados | 240 (234 locais + 6 contra PostgreSQL real no CI) |
+| Testes automatizados | 299 (292 passam localmente + 7 contra PostgreSQL real no CI) |
 
 ---
 
@@ -52,7 +52,7 @@ A comida sobra onde há comércio e a fome está na periferia. No recorte do pro
 
 ```mermaid
 flowchart LR
-    U[Doador · ONG · Admin] -->|X-Chave-API| API
+    U[Doador · ONG · Transportador · Admin] -->|Bearer ou X-Chave-API| API
     subgraph Compose[docker compose]
         API[api<br/>FastAPI + regras + ControleIA]
         INF[inferencia<br/>M1 · M2 · NLP<br/>sem segredo · sem internet]
@@ -61,6 +61,7 @@ flowchart LR
     API -- rede interna --> INF
     API -->|rede_api| DB[(Supabase<br/>RLS · NUMERIC · só inclusão)]
     DASH -->|rede_dashboard: só visões| DB
+    DASH -->|login por e-mail e senha; Bearer| API
 ```
 
 ### Estrutura do repositório
@@ -88,7 +89,7 @@ rede-alimenta-ia/
 src/
 ├── api/              FastAPI: rotas, autenticação/papéis, matching de lote novo, repositório, ponte com a IA
 ├── inferencia/       serviço de inferência isolado (só executa os modelos)
-├── dashboard/        Streamlit: impacto social, qualidade da IA, segurança, ao vivo
+├── dashboard/        Streamlit: login, doador, ONG, transportador, admin e painel público
 ├── regras/           regras de negócio puras (validade, prioridade, matching, questionário, caixa, refeições)
 ├── validacao/        esquemas de entrada estritos, dígito verificador CPF/CNPJ, verificação na Receita
 ├── seguranca/        guardrail, minimização, segredos, Declaração assinada + PDF, STRIDE, resumo SAST
@@ -124,7 +125,22 @@ streamlit run src/dashboard/app.py         # dashboard em http://localhost:8501
 pytest                                     # testes
 ```
 
-Em desenvolvimento, a API aceita chaves `dev:<papel>:<id>` (ex.: `dev:doador:D-0008`, `dev:ong:O-023`, `dev:admin:A-01`). Em produção, só as chaves cadastradas por hash (`python -m src.api.chaves`).
+O dashboard usa **e-mail e senha**. O cadastro permite Doador PF/PJ, ONG (CNPJ válido e consulta à Receita) e Transportador (CPF e veículo). Doador PJ também passa pela Receita: CNPJ inexistente ou inativo é recusado; CNAE fora do ramo de alimentos fica pendente de revisão administrativa. Admin é criado por script. A API define o papel e o ID da conta e emite um token `ras_`, assinado com HMAC e válido por 8 horas; senhas ficam como scrypt, e-mail e CPF/CNPJ como HMAC. Após 5 falhas consecutivas, o login fica bloqueado por 15 minutos. Se a Receita estiver indisponível, ONG e Doador PJ ficam pendentes e não podem entrar.
+
+Cada pessoa vê somente as telas de seu papel, além do **Painel de impacto**, que é público:
+
+| Papel | Telas |
+|---|---|
+| Doador | Nova doação, minhas doações e documentos assinados |
+| ONG | Ofertas e entregas, histórico de recebimentos e meu cadastro |
+| Transportador | Minhas corridas, mapa de coleta/entrega e link para abrir a rota no Google Maps, sem chave do Google |
+| Admin | Administração e documentos assinados |
+
+O Transportador tem acesso somente de leitura às corridas atribuídas no dataset simulado. Contas novas começam sem histórico; Doador e ONG ainda precisam de vínculo ao cadastro operacional para doar ou receber (a ONG também depende de aprovação administrativa). Para demonstrar a operação completa, use as contas demo vinculadas a D-0008, O-005 e V-001.
+
+As integrações continuam aceitando `X-Chave-API`: em desenvolvimento, `dev:<papel>:<id>` (ex.: `dev:doador:D-0008`); em produção, chaves cadastradas por hash (`python -m src.api.chaves`), além dos tokens de sessão.
+
+Para criar as contas demo locais, execute `python deploy/criar_contas_demo.py --local`. O script lê o `.env` e grava as senhas somente em `segredos/contas-demo.txt`, fora do Git. A API local deve carregar a mesma `REDE_ALIMENTA_CHAVE_HMAC` do `.env`, usar o mesmo diretório `var/` e iniciar sem `REDE_ALIMENTA_DATABASE_URL` para ler `var/contas.json`. Não exiba esse arquivo em logs ou na apresentação.
 
 <details><summary>Regenerar dados, relatórios e demonstrações</summary>
 
@@ -167,10 +183,12 @@ Dependabot abre PRs semanais de atualização (pip, Docker, Actions), que passam
 
 O plano grátis do Render "dorme" após 15 min sem acesso: abra a API 1–2 min antes da apresentação.
 
+**Atualização para login por e-mail e senha:** antes de usar o login na nuvem, aplique [db/migracoes/2026-10-15_contas.sql](db/migracoes/2026-10-15_contas.sql) no SQL Editor do Supabase como dono do banco. Depois execute `python deploy/criar_contas_demo.py` (sem `--local`), com o `.env` configurado para o Supabase e a mesma chave HMAC da API no Render. O script é idempotente e grava as credenciais em `segredos/contas-demo.txt`, sem imprimi-las. Publicar o código não aplica a migração: **o login na nuvem só funciona depois desses passos**.
+
 ## Documentação
 
 - [Regras de negócio v2.1](docs/regras-de-negocio.md): fonte de verdade de todo o sistema
-- [PRD](docs/prd.md) (requisitos de produto) · [SDD](docs/sdd.md) (arquitetura, GRC, decisões D1–D13)
+- [PRD](docs/prd.md) (requisitos de produto) · [SDD](docs/sdd.md) (arquitetura, GRC, decisões D1–D14; D13: auditoria no banco, D14: login)
 - [Esquema do banco](db/schema.sql) · [Dicionário de dados](docs/dicionario-de-dados.md)
 - Governança: [política de IA e dados](docs/governanca/politica-governanca-ia.md) · [análise de agência da IA](docs/governanca/analise-agencia-ia.md) · [matriz de controles](docs/governanca/matriz-controles.md) · [inventário de dados (LGPD)](docs/governanca/inventario-de-dados.md) · [RIPD](docs/governanca/ripd.md)
 - [Matriz STRIDE](docs/stride/matriz-stride.md) · [planilha](docs/stride/matriz-stride.xlsx)

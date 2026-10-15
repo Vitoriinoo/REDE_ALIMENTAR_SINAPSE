@@ -7,19 +7,22 @@ import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 
+from html import escape
+
 from src.dashboard import dados
+from src.dashboard.tema import (BORDA, COR_PRIORIDADE, LARANJA, MUDO, STATUS, TINTA, TINTA_2, VERDE, aplicar_tema,
+                                cabecalho, cartao, selo_prioridade)
 from src.seguranca.stride import AMEACAS, nivel
 
-# --- Paleta (referência validada: categórica em ordem fixa, sequencial azul, status reservado) ----
-AZUL, LARANJA, AQUA = "#2a78d6", "#eb6834", "#1baf7a"
-SEQ_AZUL = ["#cde2fb", "#9ec5f4", "#6da7ec", "#3987e5", "#256abf", "#184f95", "#0d366b"]
-STATUS = {"bom": "#0ca30c", "atencao": "#fab219", "critico": "#d03b3b"}
-TINTA, TINTA_2, MUDO, GRADE, EIXO = "#0b0b0b", "#52514e", "#898781", "#e1e0d9", "#c3c2b7"
+# --- Paleta dos gráficos: série principal verde (alimento salvo), comparação laranja, sequencial verde ---
+SEQ_VERDE = ["#e8f5ee", "#c2e5d0", "#93cfae", "#62b588", "#3a9a66", "#1f8a4c", "#125c32"]
+FUNDO, GRADE, EIXO = "#ffffff", "#eef1f5", BORDA
 FONTE = 'system-ui, -apple-system, "Segoe UI", sans-serif'
+
 
 def layout(fig: go.Figure, altura: int = 340, legenda: bool = False) -> go.Figure:
     fig.update_layout(
-        height=altura, margin=dict(l=8, r=8, t=72 if legenda else 36, b=8), paper_bgcolor="#fcfcfb", plot_bgcolor="#fcfcfb",
+        height=altura, margin=dict(l=8, r=8, t=72 if legenda else 36, b=8), paper_bgcolor=FUNDO, plot_bgcolor=FUNDO,
         font=dict(family=FONTE, color=TINTA_2, size=13), title_font=dict(color=TINTA, size=15),
         showlegend=legenda, legend=dict(orientation="h", y=1.0, yanchor="bottom", x=0, title=None),
         hoverlabel=dict(bgcolor="#ffffff", font=dict(family=FONTE, color=TINTA)),
@@ -42,9 +45,9 @@ def carregar():
     return dados.impacto_regiao(), dados.mensal(), dados.match_prioridade(), dados.calor(), dados.match_geral()
 
 
-st.title("Painel de impacto")
-st.caption(f"IA + DevSecOps contra o desperdício de alimentos na Grande São Paulo · fonte: **{dados.fonte()}** · "
-           "ano simulado set/2025–ago/2026 + lotes cadastrados ao vivo pela API")
+aplicar_tema()
+cabecalho("Painel de impacto", "IA + DevSecOps contra o desperdício de alimentos na Grande São Paulo")
+st.caption(f"Fonte: **{dados.fonte()}** · ano simulado set/2025–ago/2026 + lotes cadastrados ao vivo pela API")
 
 regioes, mes, match, calor, geral = carregar()
 metricas = dados.relatorio("metricas_modelos.json") or {}
@@ -71,18 +74,18 @@ with aba_impacto:
     with esq:
         fig = px.density_map(calor, lat="lat", lon="lon", z="refeicoes", radius=30, zoom=9.2, opacity=0.8,
                              center={"lat": -23.58, "lon": -46.60}, map_style="carto-positron",
-                             color_continuous_scale=SEQ_AZUL, hover_data={"kg_salvos": ":,.0f", "refeicoes": ":,.0f"},
+                             color_continuous_scale=SEQ_VERDE, hover_data={"kg_salvos": ":,.0f", "refeicoes": ":,.0f"},
                              title="Mapa de calor: onde as refeições chegaram (local da ONG, grade de ~1 km)")
         fig.update_coloraxes(colorbar=dict(title="refeições", thickness=10))
         st.plotly_chart(layout(fig, 460), use_container_width=True)
     with dir_:
         r = regioes.sort_values("refeicoes")
         fig = px.bar(r, x="refeicoes", y="regiao", orientation="h", color="indice_vulnerabilidade",
-                     color_continuous_scale=SEQ_AZUL, range_color=(0, 1),
+                     color_continuous_scale=SEQ_VERDE, range_color=(0, 1),
                      hover_data={"kg_salvos": ":,.0f", "indice_vulnerabilidade": ":.2f", "regiao": False},
                      labels={"refeicoes": "refeições", "regiao": "", "indice_vulnerabilidade": "vulnerab."},
                      title="Refeições por região de destino (cor = vulnerabilidade IPVS)")
-        fig.update_traces(marker_line_color="#fcfcfb", marker_line_width=2)
+        fig.update_traces(marker_line_color=FUNDO, marker_line_width=2)
         fig.update_coloraxes(colorbar=dict(title="IPVS", thickness=10))
         st.plotly_chart(layout(fig, 460), use_container_width=True)
 
@@ -92,13 +95,13 @@ with aba_impacto:
     with a:
         fig = px.line(m, x="mes", y="refeicoes", markers=True, title="Refeições por mês",
                       labels={"mes": "", "refeicoes": "refeições"})
-        fig.update_traces(line=dict(color=AZUL, width=2), marker=dict(size=8, line=dict(color="#fcfcfb", width=2)))
+        fig.update_traces(line=dict(color=VERDE, width=2), marker=dict(size=8, line=dict(color=FUNDO, width=2)))
         fig.update_layout(hovermode="x unified")
         st.plotly_chart(layout(fig), use_container_width=True)
     with b:
         fig = px.line(m, x="mes", y="taxa_descarte", markers=True, title="Taxa de descarte por mês (meta < 20%)",
                       labels={"mes": "", "taxa_descarte": "descarte"})
-        fig.update_traces(line=dict(color=LARANJA, width=2), marker=dict(size=8, line=dict(color="#fcfcfb", width=2)))
+        fig.update_traces(line=dict(color=LARANJA, width=2), marker=dict(size=8, line=dict(color=FUNDO, width=2)))
         fig.add_hline(y=0.20, line_dash="dot", line_color=MUDO, annotation_text="meta 20%",
                       annotation_font_color=TINTA_2)
         fig.update_yaxes(tickformat=".0%", rangemode="tozero")
@@ -132,9 +135,9 @@ with aba_ia:
             "quem": ["Modelo 2 (Random Forest)"] * 4 + ["Heurística sem IA"] * 4,
         })
         fig = px.bar(comp, x="métrica", y="valor", color="quem", barmode="group", text_auto=".2f",
-                     color_discrete_sequence=[AZUL, LARANJA], title="Modelo 2 × heurística (conjunto de teste)",
+                     color_discrete_sequence=[VERDE, LARANJA], title="Modelo 2 × heurística (conjunto de teste)",
                      labels={"valor": "", "métrica": ""})
-        fig.update_traces(marker_line_color="#fcfcfb", marker_line_width=2, textfont_color=TINTA_2,
+        fig.update_traces(marker_line_color=FUNDO, marker_line_width=2, textfont_color=TINTA_2,
                           textposition="outside")
         fig.update_yaxes(range=[0, 1.08], tickformat=".0%")
         st.plotly_chart(layout(fig, 360, legenda=True), use_container_width=True)
@@ -142,7 +145,7 @@ with aba_ia:
         mc = m1.get("matriz_confusao", {})
         if mc:
             fig = px.imshow(mc["valores"], x=mc["ordem"], y=mc["ordem"], text_auto=True,
-                            color_continuous_scale=SEQ_AZUL, labels=dict(x="previsto", y="real", color="lotes"),
+                            color_continuous_scale=SEQ_VERDE, labels=dict(x="previsto", y="real", color="lotes"),
                             title="Modelo 1: matriz de confusão (teste)")
             fig.update_traces(xgap=2, ygap=2)
             fig.update_coloraxes(showscale=False)
@@ -156,7 +159,7 @@ with aba_ia:
                      title="Tempo mediano até o match por prioridade (min)",
                      labels={"prioridade": "", "mediana_min": "minutos"},
                      hover_data={"media_min": ":.0f", "matches": ":,"})
-        fig.update_traces(marker_color=AZUL, marker_line_color="#fcfcfb", marker_line_width=2,
+        fig.update_traces(marker_color=VERDE, marker_line_color=FUNDO, marker_line_width=2,
                           textposition="outside", textfont_color=TINTA_2)
         st.plotly_chart(layout(fig), use_container_width=True)
     with b:
@@ -167,7 +170,7 @@ with aba_ia:
             fig = px.bar(s, x="importancia", y="feature", orientation="h",
                          title="Modelo 2: o que mais pesa (importância por permutação)",
                          labels={"importancia": "queda no PR-AUC", "feature": ""})
-            fig.update_traces(marker_color=AZUL, marker_line_color="#fcfcfb", marker_line_width=2)
+            fig.update_traces(marker_color=VERDE, marker_line_color=FUNDO, marker_line_width=2)
             st.plotly_chart(layout(fig), use_container_width=True)
     st.caption("Split temporal: treino set/2025–fev/2026, validação mar–mai/2026 (escolha de modelo e limiar), "
                "teste jun–ago/2026. A IA só recomenda: piso de segurança, interruptor por modelo e fallback para a regra.")
@@ -187,11 +190,11 @@ with aba_seg:
     stride_res = [nivel(a.residual) for a in AMEACAS]
     c[2].metric("STRIDE: ameaças mapeadas", len(AMEACAS))
     c[2].caption(f"{sum(n in ('Alto', 'Crítico') for n in stride_res)} altas/críticas no risco residual")
-    c[3].markdown(
-        f"<div style='padding-top:.2rem;color:{TINTA_2};font-size:.9rem'>Security gate do pipeline</div>"
-        f"<div style='font-size:1.6rem;color:{cor};font-weight:600'>"
-        f"{'Aprovado' if gate.get('aprovado') else 'Reprovado'}</div>"
-        f"<div style='color:{MUDO};font-size:.8rem'>{gate.get('regra', '')}</div>", unsafe_allow_html=True)
+    with c[3]:
+        cartao("Security gate do pipeline",
+               f"<span class='ra-selo' style='background:{cor};font-size:.95rem'>"
+               f"{'Aprovado' if gate.get('aprovado') else 'Reprovado'}</span>"
+               f"<div class='ra-sub' style='margin-top:.4rem'>{escape(str(gate.get('regra', '')))}</div>")
 
     a, b = st.columns(2)
     with a:
@@ -202,9 +205,9 @@ with aba_seg:
             linhas += [{"severidade": rot, "varredura": "Primeira varredura", "achados": antes},
                        {"severidade": rot, "varredura": "Atual", "achados": depois}]
         fig = px.bar(pd.DataFrame(linhas), x="severidade", y="achados", color="varredura", barmode="group",
-                     text_auto=True, color_discrete_sequence=[LARANJA, AZUL],
+                     text_auto=True, color_discrete_sequence=[LARANJA, VERDE],
                      title="Achados SAST por severidade: antes × depois", labels={"severidade": "", "achados": ""})
-        fig.update_traces(marker_line_color="#fcfcfb", marker_line_width=2, textposition="outside",
+        fig.update_traces(marker_line_color=FUNDO, marker_line_width=2, textposition="outside",
                           textfont_color=TINTA_2)
         st.plotly_chart(layout(fig, 360, legenda=True), use_container_width=True)
     with b:
@@ -212,7 +215,7 @@ with aba_seg:
         for a_ in AMEACAS:
             grade.loc[a_.i_res, a_.p_res] += 1
         fig = px.imshow(grade.values, x=[f"P{p}" for p in grade.columns], y=[f"I{i}" for i in grade.index],
-                        text_auto=True, color_continuous_scale=SEQ_AZUL,
+                        text_auto=True, color_continuous_scale=SEQ_VERDE,
                         title="STRIDE residual: ameaças por Probabilidade × Impacto",
                         labels=dict(color="ameaças"))
         fig.update_traces(xgap=2, ygap=2)
@@ -270,6 +273,7 @@ with aba_vivo:
             estilo = tabela.style.apply(lambda _: [fundo.get(niveis[i], "") for i in range(len(tabela))], axis=0) \
                 .format({c: f for c, f in formatos.items() if c in tabela}, na_rep="—")
             st.dataframe(estilo, hide_index=True, use_container_width=True)
+            st.markdown(" ".join(selo_prioridade(p) for p in COR_PRIORIDADE), unsafe_allow_html=True)
             st.caption("Linha vermelha: CRÍTICA pendente · linha amarela: ALTA pendente · a prioridade vem do Modelo 1 "
                        "com piso de segurança, que já considera a validade calculada pelo sistema.")
 

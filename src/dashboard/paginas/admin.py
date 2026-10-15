@@ -12,17 +12,19 @@ import streamlit as st
 
 from src.dashboard.cliente_api import ErroAPI, chamar
 from src.dashboard.dados import API_PUBLICA
+from src.dashboard.tema import LARANJA, VERDE, aplicar_tema, cabecalho, selo_prioridade
 
 BRASILIA = timezone(timedelta(hours=-3))
+aplicar_tema()
 ident, chave = st.session_state.get("ident") or {}, st.session_state.get("chave")
 if ident.get("papel") != "admin":
-    st.warning("Entre com uma chave de administração na barra lateral.")
+    st.warning("Entre com uma conta de administração.")
     st.stop()
 
 NOMES = {"prioridade": "Modelo 1: prioridade do lote", "descarte": "Modelo 2: risco de descarte",
          "nlp": "NLP: sugestão de categoria (Hugging Face)"}
 
-st.title("Administração")
+cabecalho("Administração", "Controle da IA, auditoria e lotes cadastrados pela API")
 st.caption(f"Admin `{ident['id']}` · documentação da API: {API_PUBLICA}/docs")
 
 try:
@@ -40,7 +42,9 @@ for modelo, nome in NOMES.items():
         ligado = estado["ligados"].get(modelo, False)
         meta = (estado["modelos"] or {}).get({"prioridade": "m1", "descarte": "m2", "nlp": "nlp"}[modelo])
         c[0].markdown(f"**{nome}**  \n{'versão ' + meta['versao'] if meta and meta.get('versao') else 'não carregado'}")
-        c[1].markdown("**ligado**" if ligado else "**desligado** (regra assume)")
+        c[1].markdown(f"<span class='ra-selo' style='background:{VERDE if ligado else LARANJA}'>"
+                      f"{'LIGADO' if ligado else 'DESLIGADO'}</span>"
+                      + ("" if ligado else "<div class='ra-sub'>regra assume</div>"), unsafe_allow_html=True)
         motivo = c[2].text_input("Motivo (vai para o log)", key=f"mot_{modelo}",
                                  placeholder="ex.: drift detectado, auditoria")
         if c[3].button("Desligar" if ligado else "Ligar", key=f"bt_{modelo}", use_container_width=True):
@@ -64,4 +68,8 @@ if lotes.empty:
     st.info("Nenhum lote cadastrado pela API ainda.")
 else:
     lotes["ts_cadastro"] = pd.to_datetime(lotes["ts_cadastro"], utc=True).dt.tz_convert(BRASILIA).dt.strftime("%d/%m %H:%M")
+    if "prioridade" in lotes:
+        contagem = lotes["prioridade"].fillna("").astype(str).str.upper().value_counts()
+        st.markdown(" &nbsp; ".join(f"{selo_prioridade(p)} {int(contagem.get(p, 0))}"
+                                    for p in ("CRITICA", "ALTA", "MEDIA", "BAIXA")), unsafe_allow_html=True)
     st.dataframe(lotes, hide_index=True, use_container_width=True)

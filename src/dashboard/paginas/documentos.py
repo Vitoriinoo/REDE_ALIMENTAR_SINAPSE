@@ -16,12 +16,14 @@ import streamlit as st
 from cryptography.hazmat.primitives.serialization import load_pem_public_key
 
 from src.dashboard.cliente_api import ErroAPI, chamar
+from src.dashboard.tema import STATUS, aplicar_tema, cabecalho
 from src.seguranca.declaracao import DeclaracaoAssinada, verificar_itens
 
 BRASILIA = timezone(timedelta(hours=-3))
+aplicar_tema()
 ident, chave = st.session_state.get("ident") or {}, st.session_state.get("chave")
 if ident.get("papel") not in ("doador", "admin"):
-    st.warning("Entre com uma chave de doador ou de administração.")
+    st.warning("Entre com uma conta de doador ou de administração.")
     st.stop()
 
 CATEGORIA = {"preparado": "Preparado", "refrigerado": "Refrigerado", "congelado": "Congelado",
@@ -56,9 +58,8 @@ def _quadro_verificacao(itens: list[dict]) -> None:
                            "Detalhe": [i["detalhe"] for i in itens]}).set_index("Conferência"))
 
 
-st.title("Documentos assinados")
-st.caption("Declaração de Doação (Lei 14.016/2020): JSON canônico, SHA-256 e assinatura RSA-PSS, "
-           "gravada no banco numa tabela só de inclusão.")
+cabecalho("Documentos assinados", "Declaração de Doação (Lei 14.016/2020) com assinatura verificável")
+st.caption("JSON canônico, SHA-256 e assinatura RSA-PSS, gravada no banco numa tabela só de inclusão.")
 
 try:
     lotes = chamar("GET", "/v1/doador/lotes" if ident["papel"] == "doador" else "/v1/lotes", chave)
@@ -84,6 +85,13 @@ c = d["conteudo"]
 alimento, doador = c.get("alimento", {}), c.get("doador", {})
 
 # --- O documento ----------------------------------------------------------------------------
+_cor_resultado = {"ACEITA": STATUS["bom"], "BLOQUEADA": STATUS["critico"]}.get(c.get("resultado"))
+if _cor_resultado:
+    st.markdown(f"<span class='ra-selo' style='background:{_cor_resultado}'>"
+                f"{'DOAÇÃO ACEITA' if c.get('resultado') == 'ACEITA' else 'DOAÇÃO BLOQUEADA'}</span> "
+                f"<span class='ra-selo' style='background:{STATUS['bom'] if d.get('assinatura_valida') else STATUS['critico']}'>"
+                f"{'ASSINATURA VÁLIDA' if d.get('assinatura_valida') else 'ASSINATURA NÃO CONFERE'}</span>",
+                unsafe_allow_html=True)
 with st.container(border=True):
     topo = st.columns(4)
     topo[0].metric("Declaração", c.get("declaracao_id", "—"))

@@ -78,7 +78,8 @@ def test_toda_rota_com_corpo_usa_esquema_estrito(cliente):
 def test_toda_rota_de_negocio_exige_autenticacao(cliente):
     from src.api.app import app
 
-    publicas = {"/saude", "/docs", "/docs/oauth2-redirect", "/redoc", "/openapi.json"}
+    publicas = {"/saude", "/docs", "/docs/oauth2-redirect", "/redoc", "/openapi.json",
+                "/v1/auth/cadastro", "/v1/auth/login"}  # entrar e criar conta são, por definição, sem credencial
     for rota in app.routes:
         if isinstance(rota, APIRoute) and rota.path not in publicas:
             assert rota.dependant.dependencies, f"{rota.path} sem autenticação"

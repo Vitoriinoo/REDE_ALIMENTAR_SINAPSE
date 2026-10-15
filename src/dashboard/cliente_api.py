@@ -1,8 +1,8 @@
 """Cliente HTTP da API para as telas de operação.
 
 As telas NÃO acessam o banco nem as regras diretamente para agir: tudo passa pela API, com as
-mesmas validações, autenticação e log de qualquer outro cliente. A chave de acesso fica só na
-sessão do navegador de quem entrou (st.session_state), nunca em arquivo ou segredo do app.
+mesmas validações, autenticação e log de qualquer outro cliente. O token de sessão (ou a chave de
+API) fica só na sessão do navegador de quem entrou (st.session_state), nunca em arquivo ou segredo do app.
 """
 
 from __future__ import annotations
@@ -58,7 +58,13 @@ def _mensagem(r: httpx.Response) -> str:
 
 
 def chamar(metodo: str, rota: str, chave: str | None = None, corpo: dict | None = None, bruto: bool = False):
-    cabecalhos = {"X-Chave-API": chave} if chave else {}
+    # Token de sessão do login (ras_...) vai como Bearer; chave de API antiga, no cabeçalho de sempre.
+    if not chave:
+        cabecalhos = {}
+    elif chave.startswith("ras_"):
+        cabecalhos = {"Authorization": f"Bearer {chave}"}
+    else:
+        cabecalhos = {"X-Chave-API": chave}
     try:
         r = httpx.request(metodo, f"{API_INTERNA}{rota}", headers=cabecalhos, json=corpo, timeout=TIMEOUT)
     except httpx.HTTPError as e:
@@ -66,3 +72,13 @@ def chamar(metodo: str, rota: str, chave: str | None = None, corpo: dict | None 
     if r.status_code >= 400:
         raise ErroAPI(r.status_code, _mensagem(r))
     return r.content if bruto else r.json()
+
+
+def entrar(email: str, senha: str) -> dict:
+    """Login com e-mail e senha: {token, papel, id, nome, expira_em}. Erro vira ErroAPI (401, 403, 429)."""
+    return chamar("POST", "/v1/auth/login", corpo={"email": email, "senha": senha})
+
+
+def cadastrar(dados: dict) -> dict:
+    """Cria conta de doador, ONG ou transportador: {id, papel, status}. Motivo da recusa vem em ErroAPI."""
+    return chamar("POST", "/v1/auth/cadastro", corpo=dados)

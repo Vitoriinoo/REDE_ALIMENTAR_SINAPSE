@@ -110,6 +110,16 @@ A IA **recomenda**. As pessoas **decidem** as ações de impacto. Toda regra cr�
 
 **Regra:** um usuário tem exatamente **um perfil**. Contas diferentes para papéis diferentes.
 
+### 3.1 Contas e login (v2.2, decidido com o grupo em 2026-10-15)
+
+- **Entrada com e-mail e senha** (mínimo 10 caracteres). A API devolve um token de sessão de 8 h; papel e ID vêm **da conta**, nunca do pedido. Erro de login é sempre genérico ("e-mail ou senha inválidos"); **5 falhas seguidas** bloqueiam aquele e-mail por 15 min.
+- **Doador:** escolhe PF (CPF) ou PJ (CNPJ) no cadastro; o tipo fica **fixo na conta**. **PF:** só o dígito verificador do CPF. **PJ:** dígito **e** consulta à Receita (situação ATIVA), como manda a 6.3 (decisão do grupo, Q14). CNAE fora do ramo de alimentos não bloqueia: a conta fica **pendente para revisão do admin**. Receita fora do ar → conta **pendente**, igual à ONG.
+- **ONG:** só com **CNPJ válido** (dígito) **e ativo na Receita** com natureza jurídica sem fins lucrativos (6.3). **Receita fora do ar → conta pendente**, que não entra; nunca é aprovada sem verificar. Conta ativa permite entrar; **receber lotes** continua exigindo o cadastro operacional e a aprovação do admin (6.3, 6.4).
+- **Transportador:** e-mail, senha, CPF e veículo (moto, carro ou utilitário). Nesta versão a tela dele é só leitura.
+- **Admin:** sem cadastro aberto; criado por script.
+- **Um documento por papel:** o mesmo CPF/CNPJ não abre duas contas do mesmo papel.
+- **LGPD (11):** e-mail e CPF/CNPJ guardados **só como HMAC**; senha só como hash scrypt. As chaves de API antigas continuam valendo para testes e integração.
+
 ---
 
 ## 4. Lotes de alimentos
