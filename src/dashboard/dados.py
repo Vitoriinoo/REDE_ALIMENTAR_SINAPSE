@@ -148,7 +148,7 @@ def alertas_ao_vivo(r: pd.DataFrame) -> tuple[pd.DataFrame, list[str | None], in
     tabela = r.assign(prioridade=r["prioridade"].map(lambda p: PRIORIDADE.get(p, p)))
     for col in ("peso_kg", "risco_descarte"):  # NUMERIC chega como Decimal e aparece "9.500000"
         if col in tabela:
-            tabela[col] = pd.to_numeric(tabela[col], errors="coerce").round(2)
+            tabela[col] = pd.to_numeric(tabela[col], errors="coerce").astype(float).round(2)
     return tabela, niveis, niveis.count("critico"), niveis.count("atencao")
 
 

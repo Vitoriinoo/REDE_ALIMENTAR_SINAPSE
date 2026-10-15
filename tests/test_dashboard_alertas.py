@@ -28,7 +28,8 @@ def test_peso_numeric_do_banco_aparece_como_numero():
     from decimal import Decimal
 
     r = pd.DataFrame({"prioridade": ["BAIXA"], "status_final": ["PENDENTE"], "peso_kg": [Decimal("9.500000")]})
-    assert alertas_ao_vivo(r)[0]["peso_kg"].tolist() == [9.5]
+    peso = alertas_ao_vivo(r)[0]["peso_kg"]
+    assert peso.dtype == "float64" and peso.tolist() == [9.5]  # Decimal == 9.5 também é True: checar o tipo
 
 
 def test_mediana_geral_e_de_todos_os_matches_nao_das_prioridades():

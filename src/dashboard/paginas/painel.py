@@ -265,7 +265,9 @@ with aba_vivo:
                 st.warning(f"{n_alta} lote(s) de prioridade ALTA pendente(s).", icon="🟡")
             fundo = {"critico": "background-color: #f8d4d4; color: #5c1010",
                      "atencao": "background-color: #fdedc4; color: #4d3500"}
-            estilo = tabela.style.apply(lambda _: [fundo.get(niveis[i], "") for i in range(len(tabela))], axis=0)
+            formatos = {"peso_kg": "{:.1f}", "risco_descarte": "{:.2f}"}  # o Styler usa 6 casas por padrão
+            estilo = tabela.style.apply(lambda _: [fundo.get(niveis[i], "") for i in range(len(tabela))], axis=0) \
+                .format({c: f for c, f in formatos.items() if c in tabela}, na_rep="—")
             st.dataframe(estilo, hide_index=True, use_container_width=True)
             st.caption("🔴 vermelho: CRÍTICA pendente · 🟡 amarelo: ALTA pendente · a prioridade vem do Modelo 1 "
                        "com piso de segurança, que já considera a validade calculada pelo sistema.")
