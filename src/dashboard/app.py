@@ -74,14 +74,15 @@ with st.sidebar:
     st.caption(f"API: {urlsplit(API_INTERNA).netloc or API_INTERNA}")
 
 papel = (st.session_state.get("ident") or {}).get("papel")
-paginas = [st.Page("paginas/painel.py", title="Painel de impacto", default=True)]
+# Depois de entrar, a página inicial é a do papel (o painel público continua no menu).
+paginas = [st.Page("paginas/painel.py", title="Painel de impacto", default=papel is None)]
 if papel == "doador":
-    paginas += [st.Page("paginas/doador.py", title="Doar alimentos"),
+    paginas += [st.Page("paginas/doador.py", title="Doar alimentos", default=True),
                 st.Page("paginas/documentos.py", title="Documentos assinados")]
 elif papel == "ong":
-    paginas.append(st.Page("paginas/ong.py", title="ONG"))
+    paginas.append(st.Page("paginas/ong.py", title="ONG: ofertas, histórico e cadastro", default=True))
 elif papel == "admin":
-    paginas += [st.Page("paginas/admin.py", title="Administração"),
+    paginas += [st.Page("paginas/admin.py", title="Administração", default=True),
                 st.Page("paginas/documentos.py", title="Documentos assinados")]
 
 st.navigation(paginas).run()
