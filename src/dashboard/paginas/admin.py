@@ -40,19 +40,19 @@ for modelo, nome in NOMES.items():
         ligado = estado["ligados"].get(modelo, False)
         meta = (estado["modelos"] or {}).get({"prioridade": "m1", "descarte": "m2", "nlp": "nlp"}[modelo])
         c[0].markdown(f"**{nome}**  \n{'versão ' + meta['versao'] if meta and meta.get('versao') else 'não carregado'}")
-        c[1].markdown("🟢 **ligado**" if ligado else "⚪ **desligado** (regra assume)")
+        c[1].markdown("**ligado**" if ligado else "**desligado** (regra assume)")
         motivo = c[2].text_input("Motivo (vai para o log)", key=f"mot_{modelo}",
                                  placeholder="ex.: drift detectado, auditoria")
         if c[3].button("Desligar" if ligado else "Ligar", key=f"bt_{modelo}", use_container_width=True):
             if len(motivo.strip()) < 3:
-                st.toast("Informe o motivo: toda troca é auditada.", icon="⚠️")
+                st.toast("Informe o motivo: toda troca é auditada.")
             else:
                 try:
                     chamar("POST", "/v1/admin/ia", chave, {"modelo": modelo, "ligado": not ligado,
                                                            "motivo": motivo.strip()})
                     st.rerun()
                 except ErroAPI as e:
-                    st.toast(e.mensagem, icon="⚠️")
+                    st.toast(e.mensagem)
 
 st.subheader("Lotes recentes (API)")
 try:

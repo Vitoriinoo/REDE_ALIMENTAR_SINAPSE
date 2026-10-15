@@ -66,7 +66,7 @@ with aba_doar:
     st.subheader("1. O que você quer doar?")
     descricao = st.text_area("Descreva o lote com suas palavras", max_chars=500, key="descricao",
                              placeholder="Ex.: sobraram 20 marmitas de arroz, feijão e frango do almoço, estão na geladeira")
-    if st.button("✨ Pedir sugestão da IA", disabled=len(descricao.strip()) < 3):
+    if st.button("Pedir sugestão da IA", disabled=len(descricao.strip()) < 3):
         try:
             st.session_state["sugestao"] = chamar("POST", "/v1/lotes/sugestao", chave, {"texto": descricao.strip()})
         except ErroAPI as e:
@@ -202,7 +202,7 @@ with aba_doar:
                         f"SHA-256 `{d['sha256'][:24]}…` · registrada no banco (só inclusão).")
             try:
                 pdf = chamar("GET", f"/v1/lotes/{res['codigo']}/declaracao.pdf", chave, bruto=True)
-                st.download_button("📄 Baixar declaração (PDF)", pdf, file_name=f"declaracao-{res['codigo']}.pdf",
+                st.download_button("Baixar declaração (PDF)", pdf, file_name=f"declaracao-{res['codigo']}.pdf",
                                    mime="application/pdf")
             except ErroAPI as e:
                 st.caption(f"PDF indisponível: {e.mensagem}")

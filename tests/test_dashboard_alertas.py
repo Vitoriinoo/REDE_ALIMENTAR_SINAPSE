@@ -14,7 +14,7 @@ def test_alerta_so_para_pendente_critica_ou_alta():
     tabela, niveis, n_critica, n_alta = alertas_ao_vivo(r)
     assert niveis == ["critico", "atencao", None, None, None]  # CRÍTICA já entregue não alerta
     assert (n_critica, n_alta) == (1, 1)
-    assert tabela["prioridade"].tolist()[:2] == ["🔴 CRÍTICA", "🟠 ALTA"]
+    assert tabela["prioridade"].tolist()[:2] == ["CRÍTICA", "ALTA"]
 
 
 def test_tabela_vazia_e_prioridade_desconhecida_nao_quebram():

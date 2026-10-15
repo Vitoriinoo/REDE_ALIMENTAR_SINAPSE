@@ -13,7 +13,7 @@ from src.seguranca.stride import AMEACAS, nivel
 # --- Paleta (referência validada: categórica em ordem fixa, sequencial azul, status reservado) ----
 AZUL, LARANJA, AQUA = "#2a78d6", "#eb6834", "#1baf7a"
 SEQ_AZUL = ["#cde2fb", "#9ec5f4", "#6da7ec", "#3987e5", "#256abf", "#184f95", "#0d366b"]
-STATUS = {"bom": ("#0ca30c", "✔"), "atencao": ("#fab219", "▲"), "critico": ("#d03b3b", "✖")}
+STATUS = {"bom": "#0ca30c", "atencao": "#fab219", "critico": "#d03b3b"}
 TINTA, TINTA_2, MUDO, GRADE, EIXO = "#0b0b0b", "#52514e", "#898781", "#e1e0d9", "#c3c2b7"
 FONTE = 'system-ui, -apple-system, "Segoe UI", sans-serif'
 
@@ -179,7 +179,7 @@ with aba_seg:
     achados_antes = sum(ba.values()) + sum(sum(t["antes"].values()) for t in trivy.values())
     achados_depois = sum(bd.values()) + sum(sum(t["depois"].values()) for t in trivy.values())
     gate = sast.get("gate", {})
-    cor, icone = STATUS["bom"] if gate.get("aprovado") else STATUS["critico"]
+    cor = STATUS["bom"] if gate.get("aprovado") else STATUS["critico"]
     c = st.columns(4)
     c[0].metric("Vulnerabilidades mitigadas (SAST)", br(max(achados_antes - achados_depois, 0)),
                 help="Bandit (código) + Trivy (imagens e dependências): primeira varredura × atual")
@@ -189,7 +189,7 @@ with aba_seg:
     c[2].caption(f"{sum(n in ('Alto', 'Crítico') for n in stride_res)} altas/críticas no risco residual")
     c[3].markdown(
         f"<div style='padding-top:.2rem;color:{TINTA_2};font-size:.9rem'>Security gate do pipeline</div>"
-        f"<div style='font-size:1.6rem;color:{TINTA}'><span style='color:{cor}'>{icone}</span> "
+        f"<div style='font-size:1.6rem;color:{cor};font-weight:600'>"
         f"{'Aprovado' if gate.get('aprovado') else 'Reprovado'}</div>"
         f"<div style='color:{MUDO};font-size:.8rem'>{gate.get('regra', '')}</div>", unsafe_allow_html=True)
 
@@ -222,8 +222,10 @@ with aba_seg:
     mit = pd.DataFrame(sast.get("mitigados", []))
     if len(mit):
         st.subheader("O que foi corrigido")
-        st.dataframe(mit[["ferramenta", "regra", "severidade", "arquivo", "risco", "correcao"]], hide_index=True,
-                     use_container_width=True)
+        tabela_mit = mit[["ferramenta", "regra", "severidade", "arquivo", "risco", "correcao"]].rename(columns={
+            "ferramenta": "Ferramenta", "regra": "Regra", "severidade": "Severidade", "arquivo": "Onde",
+            "risco": "Risco", "correcao": "Correção"})
+        st.table(tabela_mit.set_index("Ferramenta"))  # st.table quebra a linha; st.dataframe cortava o texto
 
     obs = dados.relatorio("observabilidade_demo.json") or {}
     guard = (dados.relatorio("avaliacao_nlp.json") or {}).get("guardrail", {}).get("v2", {})
@@ -232,7 +234,7 @@ with aba_seg:
         st.subheader("Observabilidade (anomalias injetadas)")
         inj = pd.DataFrame(obs.get("anomalias_injetadas", []))
         if len(inj):
-            inj["detectado"] = inj["detectado"].map({True: "✔ detectada", False: "✖ não detectada"})
+            inj["detectado"] = inj["detectado"].map({True: "detectada", False: "não detectada"})
             st.dataframe(inj[["anomalia", "detectado", "nivel"]], hide_index=True, use_container_width=True)
     with b:
         st.subheader("Guardrail de entrada (texto livre)")
@@ -259,17 +261,16 @@ with aba_vivo:
             c[2].metric("Entregues", int((r["status_final"] == "ENTREGUE").sum()))
             c[3].metric("Alertas pendentes", n_critica + n_alta)
             if n_critica:
-                st.error(f"{n_critica} lote(s) CRÍTICO(S) pendente(s): validade curta, ofertados primeiro às ONGs.",
-                         icon="🔴")
+                st.error(f"{n_critica} lote(s) CRÍTICO(S) pendente(s): validade curta, ofertados primeiro às ONGs.")
             if n_alta:
-                st.warning(f"{n_alta} lote(s) de prioridade ALTA pendente(s).", icon="🟡")
+                st.warning(f"{n_alta} lote(s) de prioridade ALTA pendente(s).")
             fundo = {"critico": "background-color: #f8d4d4; color: #5c1010",
                      "atencao": "background-color: #fdedc4; color: #4d3500"}
             formatos = {"peso_kg": "{:.1f}", "risco_descarte": "{:.2f}"}  # o Styler usa 6 casas por padrão
             estilo = tabela.style.apply(lambda _: [fundo.get(niveis[i], "") for i in range(len(tabela))], axis=0) \
                 .format({c: f for c, f in formatos.items() if c in tabela}, na_rep="—")
             st.dataframe(estilo, hide_index=True, use_container_width=True)
-            st.caption("🔴 vermelho: CRÍTICA pendente · 🟡 amarelo: ALTA pendente · a prioridade vem do Modelo 1 "
+            st.caption("Linha vermelha: CRÍTICA pendente · linha amarela: ALTA pendente · a prioridade vem do Modelo 1 "
                        "com piso de segurança, que já considera a validade calculada pelo sistema.")
 
     ao_vivo()

@@ -20,7 +20,7 @@ import streamlit as st
 
 from src.dashboard.cliente_api import ErroAPI, chamar
 
-st.set_page_config(page_title="Rede Alimenta IA", page_icon="🥫", layout="wide")
+st.set_page_config(page_title="Rede Alimenta IA", layout="wide")
 st.markdown(
     "<style>[data-testid='stMetricValue']{font-size:1.9rem} .block-container{padding-top:1.6rem}</style>",
     unsafe_allow_html=True)
@@ -28,7 +28,7 @@ st.markdown(
 NOMES_PAPEL = {"doador": "Doador", "ong": "ONG", "admin": "Administração"}
 
 with st.sidebar:
-    st.markdown("### 🥫 Rede Alimenta IA")
+    st.markdown("### Rede Alimenta IA")
     ident = st.session_state.get("ident")
     if ident:
         st.success(f"Conectado como **{NOMES_PAPEL[ident['papel']]}** `{ident['id']}`")
@@ -49,12 +49,12 @@ with st.sidebar:
         st.caption("Sem chave, só o painel público fica disponível.")
 
 papel = (st.session_state.get("ident") or {}).get("papel")
-paginas = [st.Page("paginas/painel.py", title="Painel de impacto", icon="📊", default=True)]
+paginas = [st.Page("paginas/painel.py", title="Painel de impacto", default=True)]
 if papel == "doador":
-    paginas.append(st.Page("paginas/doador.py", title="Doar alimentos", icon="🍲"))
+    paginas.append(st.Page("paginas/doador.py", title="Doar alimentos"))
 elif papel == "ong":
-    paginas.append(st.Page("paginas/ong.py", title="Ofertas da ONG", icon="🏠"))
+    paginas.append(st.Page("paginas/ong.py", title="Ofertas da ONG"))
 elif papel == "admin":
-    paginas.append(st.Page("paginas/admin.py", title="Administração", icon="🛡️"))
+    paginas.append(st.Page("paginas/admin.py", title="Administração"))
 
 st.navigation(paginas).run()

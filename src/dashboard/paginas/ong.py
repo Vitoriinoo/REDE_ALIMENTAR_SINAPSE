@@ -32,9 +32,9 @@ def _hora(valor) -> str:
 def _agir(rota: str, corpo: dict | None, sucesso: str) -> None:
     try:
         r = chamar("POST", rota, chave, corpo)
-        st.toast(sucesso.format(**r), icon="✅")
+        st.toast(sucesso.format(**r))
     except ErroAPI as e:
-        st.toast(e.mensagem, icon="⚠️")
+        st.toast(e.mensagem)
 
 
 @st.fragment(run_every="15s")

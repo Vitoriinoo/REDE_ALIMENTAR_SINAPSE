@@ -135,7 +135,7 @@ def recentes() -> pd.DataFrame:
                                  "ts_cadastro"])
 
 
-PRIORIDADE = {"CRITICA": "🔴 CRÍTICA", "ALTA": "🟠 ALTA", "MEDIA": "🟡 MÉDIA", "BAIXA": "🟢 BAIXA"}
+PRIORIDADE = {"CRITICA": "CRÍTICA", "ALTA": "ALTA", "MEDIA": "MÉDIA", "BAIXA": "BAIXA"}
 # Alerta visual (enunciado: vermelho/amarelo para validade crítica): só lote ainda PENDENTE, pela
 # prioridade do Modelo 1, que já carrega a validade (regras 5). Nenhum limite novo de horas.
 ALERTA = {"CRITICA": "critico", "ALTA": "atencao"}
