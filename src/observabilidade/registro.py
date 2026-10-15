@@ -9,6 +9,11 @@ Duas trilhas:
 
 Toda gravação passa por `minimizar` (chaves proibidas removidas, CPF/CNPJ/e-mail/telefone
 mascarados): a proteção não depende de quem chama lembrar.
+
+Com `AuditoriaPostgres`, a trilha de AUDITORIA vai para `rede.registro_auditavel` (só inclusão,
+db/schema.sql) em vez de arquivo: no Render o disco é apagado a cada deploy, e a cadeia continua
+do último hash gravado no banco. A OPERACIONAL fica em arquivo, porque a retenção de 90 dias
+exige apagar, e a tabela não permite.
 """
 
 from __future__ import annotations
@@ -56,13 +61,62 @@ def _agora_utc() -> datetime:
     return datetime.now(timezone.utc)
 
 
+class AuditoriaPostgres:
+    """Trilha de auditoria em `rede.registro_auditavel`, com o papel `rede_api` (só SELECT e INSERT).
+
+    `sequencia` é UNIQUE: se dois processos tentarem continuar a mesma cadeia, o segundo INSERT
+    falha em vez de criar uma bifurcação silenciosa.
+    """
+
+    def __init__(self, url: str):
+        self._url = url
+        self._conexao = None
+
+    def _conectar(self):
+        import psycopg
+
+        if self._conexao is None or self._conexao.closed:
+            self._conexao = psycopg.connect(self._url, autocommit=True, connect_timeout=5)
+        return self._conexao
+
+    def _executar(self, consulta: str, parametros: tuple = ()):
+        import psycopg
+
+        try:
+            return self._conectar().execute(consulta, parametros)
+        except psycopg.OperationalError:
+            self._conexao = None  # o pooler pode ter derrubado a conexão ociosa: reconecta uma vez
+            return self._conectar().execute(consulta, parametros)
+
+    def ultimo(self) -> tuple[int, str] | None:
+        linha = self._executar("SELECT sequencia, hash FROM rede.registro_auditavel "
+                               "WHERE trilha = 'auditoria' ORDER BY sequencia DESC LIMIT 1").fetchone()
+        return (int(linha[0]), linha[1]) if linha else None
+
+    def gravar(self, sequencia: int, quando: datetime, registro: dict) -> None:
+        self._executar(
+            "INSERT INTO rede.registro_auditavel (sequencia, trilha, ts, acao, ator, registro, hash_anterior, hash) "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
+            (sequencia, registro["trilha"], quando, registro["acao"], registro["ator"],
+             json.dumps(registro, ensure_ascii=False, sort_keys=True, default=str),
+             registro["hash_anterior"], registro["hash"]))
+
+    def ler(self) -> list[tuple[int, dict]]:
+        linhas = self._executar("SELECT sequencia, registro FROM rede.registro_auditavel "
+                                "WHERE trilha = 'auditoria' ORDER BY sequencia").fetchall()
+        return [(int(s), r if isinstance(r, dict) else json.loads(r)) for s, r in linhas]
+
+
 class RegistroAuditavel:
-    def __init__(self, diretorio: Path, chave: bytes | None = None, relogio: Callable[[], datetime] = _agora_utc):
+    def __init__(self, diretorio: Path, chave: bytes | None = None, relogio: Callable[[], datetime] = _agora_utc,
+                 auditoria_db: AuditoriaPostgres | None = None):
         self.dir = Path(diretorio)
         self.dir.mkdir(parents=True, exist_ok=True)
         self._chave = chave or obter_segredo("REDE_ALIMENTA_CHAVE_LOG", "dev-log-somente-dados-sinteticos")
         self._relogio = relogio
         self._trava = threading.Lock()
+        self._db = auditoria_db
+        self._sequencia = 0
         self._ultimo_hash = self._recuperar_ultimo_hash()
 
     # ---------- gravação ----------
@@ -98,6 +152,12 @@ class RegistroAuditavel:
             if trilha == Trilha.AUDITORIA:
                 registro["hash_anterior"] = self._ultimo_hash
                 registro["hash"] = self._hmac(registro)
+                if self._db is not None:
+                    # Grava antes de avançar a cadeia: se o banco falhar, o erro sobe e nada muda aqui.
+                    self._db.gravar(self._sequencia + 1, agora, registro)
+                    self._sequencia += 1
+                    self._ultimo_hash = registro["hash"]
+                    return registro
                 self._ultimo_hash = registro["hash"]
             with open(self._arquivo(trilha, agora), "a", encoding="utf-8") as f:
                 f.write(json.dumps(registro, ensure_ascii=False, sort_keys=True) + "\n")
@@ -125,6 +185,12 @@ class RegistroAuditavel:
         return ancora["hash"] if hmac.compare_digest(ancora.get("hmac", ""), esperado) else "ANCORA_INVALIDA"
 
     def _recuperar_ultimo_hash(self) -> str:
+        if self._db is not None:
+            ultimo = self._db.ultimo()
+            if ultimo is None:
+                return GENESE
+            self._sequencia, hash_ = ultimo
+            return hash_
         for arquivo in reversed(self._arquivos(Trilha.AUDITORIA)):
             linhas = arquivo.read_text(encoding="utf-8").splitlines()
             if linhas:
@@ -133,24 +199,35 @@ class RegistroAuditavel:
 
     # ---------- leitura e verificação ----------
     def ler(self, trilha: Trilha) -> list[dict]:
+        if trilha == Trilha.AUDITORIA and self._db is not None:
+            return [registro for _, registro in self._db.ler()]
         return [json.loads(linha) for arq in self._arquivos(trilha)
                 for linha in arq.read_text(encoding="utf-8").splitlines() if linha.strip()]
 
-    def verificar_cadeia(self) -> list[str]:
-        """Problemas da trilha de auditoria (lista vazia = íntegra)."""
-        problemas, esperado = [], self._ancora()
+    def _linhas_auditoria(self):
+        """(onde, registro ou texto bruto) na ordem da cadeia: banco por `sequencia`, ou arquivos por mês."""
+        if self._db is not None:
+            for sequencia, registro in self._db.ler():
+                yield f"registro_auditavel:{sequencia}", registro
+            return
         for arq in self._arquivos(Trilha.AUDITORIA):
             for n, linha in enumerate(arq.read_text(encoding="utf-8").splitlines(), start=1):
-                try:
-                    registro = json.loads(linha)
-                except json.JSONDecodeError:
-                    problemas.append(f"{arq.name}:{n}: linha corrompida")
-                    continue
-                if registro.get("hash_anterior") != esperado:
-                    problemas.append(f"{arq.name}:{n}: elo quebrado (linha apagada, inserida ou reordenada)")
-                if not hmac.compare_digest(registro.get("hash", ""), self._hmac(registro)):
-                    problemas.append(f"{arq.name}:{n}: conteúdo alterado (HMAC não confere)")
-                esperado = registro.get("hash", "")
+                yield f"{arq.name}:{n}", linha
+
+    def verificar_cadeia(self) -> list[str]:
+        """Problemas da trilha de auditoria (lista vazia = íntegra)."""
+        problemas, esperado = [], GENESE if self._db is not None else self._ancora()
+        for onde, linha in self._linhas_auditoria():
+            try:
+                registro = linha if isinstance(linha, dict) else json.loads(linha)
+            except json.JSONDecodeError:
+                problemas.append(f"{onde}: linha corrompida")
+                continue
+            if registro.get("hash_anterior") != esperado:
+                problemas.append(f"{onde}: elo quebrado (linha apagada, inserida ou reordenada)")
+            if not hmac.compare_digest(registro.get("hash", ""), self._hmac(registro)):
+                problemas.append(f"{onde}: conteúdo alterado (HMAC não confere)")
+            esperado = registro.get("hash", "")
         return problemas
 
     # ---------- retenção ----------

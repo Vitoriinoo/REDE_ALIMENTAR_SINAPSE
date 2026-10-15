@@ -143,3 +143,22 @@ def test_carga_do_ano_simulado_respeita_o_esquema(conexao):
     entregues = conexao.execute("SELECT sum(entregues) FROM rede.vw_impacto_regiao").fetchone()[0]
     assert entregues == conexao.execute(
         "SELECT count(*) FROM rede.lotes WHERE status_final = 'ENTREGUE' AND ong_codigo IS NOT NULL").fetchone()[0]
+
+
+@integracao
+def test_trilha_de_auditoria_no_banco_sobrevive_ao_reinicio_e_e_so_inclusao(conexao, tmp_path):
+    """JSONB ida e volta não quebra o HMAC; a cadeia continua do banco; UPDATE é recusado até para o dono."""
+    import psycopg
+
+    from src.observabilidade.registro import AuditoriaPostgres, RegistroAuditavel, Trilha
+
+    def registro(pasta):
+        return RegistroAuditavel(pasta, chave=b"k", auditoria_db=AuditoriaPostgres(PG))
+
+    registro(tmp_path / "a").registrar(Trilha.AUDITORIA, componente="api.lotes", acao="CADASTRO_LOTE",
+                                       ator="doador:abc", papel="doador", detalhes={"peso_kg": 12.5, "ok": True})
+    depois = registro(tmp_path / "b")  # disco novo, como num deploy do Render
+    depois.registrar(Trilha.AUDITORIA, componente="api.lotes", acao="ACEITE_ONG", ator="ong:xyz", papel="ong")
+    assert depois.verificar_cadeia() == [] and len(depois.ler(Trilha.AUDITORIA)) == 2
+    with pytest.raises(psycopg.errors.RaiseException, match="só de inclusão"):
+        conexao.execute("UPDATE rede.registro_auditavel SET acao = 'X'")

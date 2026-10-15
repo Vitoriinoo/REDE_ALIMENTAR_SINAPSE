@@ -44,7 +44,7 @@ A comida sobra onde há comércio e a fome está na periferia. No recorte do pro
 | Matriz STRIDE | 34 ameaças · residual sem riscos altos ou críticos |
 | Observabilidade | 4 de 5 anomalias injetadas detectadas; alarmes falsos < 0,02% em dados normais |
 | Ciclo de feedback (RLHF adaptado) | atacante em quarentena (0 rótulos aceitos); o portão barrou um candidato que subia a média (80% → 89%) mas derrubava a classe crítica "preparado" (92% → 80%) |
-| Testes automatizados | 221 (216 locais + 5 contra PostgreSQL real no CI) |
+| Testes automatizados | 230 (224 locais + 6 contra PostgreSQL real no CI) |
 
 ---
 
@@ -170,7 +170,7 @@ O plano grátis do Render "dorme" após 15 min sem acesso: abra a API 1–2 min 
 ## Documentação
 
 - [Regras de negócio v2.1](docs/regras-de-negocio.md): fonte de verdade de todo o sistema
-- [PRD](docs/prd.md) (requisitos de produto) · [SDD](docs/sdd.md) (arquitetura, GRC, decisões D1–D12)
+- [PRD](docs/prd.md) (requisitos de produto) · [SDD](docs/sdd.md) (arquitetura, GRC, decisões D1–D13)
 - [Esquema do banco](db/schema.sql) · [Dicionário de dados](docs/dicionario-de-dados.md)
 - Governança: [política de IA e dados](docs/governanca/politica-governanca-ia.md) · [análise de agência da IA](docs/governanca/analise-agencia-ia.md) · [matriz de controles](docs/governanca/matriz-controles.md) · [inventário de dados (LGPD)](docs/governanca/inventario-de-dados.md) · [RIPD](docs/governanca/ripd.md)
 - [Matriz STRIDE](docs/stride/matriz-stride.md) · [planilha](docs/stride/matriz-stride.xlsx)

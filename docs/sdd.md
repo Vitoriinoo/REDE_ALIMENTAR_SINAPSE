@@ -218,6 +218,7 @@ Classificação, base legal, retenção e dono de **cada coluna**: `src/governan
 | D10 | **Inferência em container próprio** (rede interna, sem segredo, só leitura) | Modelo no processo da API | Checklist item 8: um pickle malicioso ou uma falha na IA não alcança segredos, banco nem internet. A `ControleIA` continua na API (decisão fora do modelo) |
 | D11 | `NUMERIC` em todo número no banco, `Decimal` no caixa | `INTEGER`/`FLOAT` | Checklist item 14 + erro clássico de dinheiro em ponto flutuante |
 | D12 | Deploy público grátis: **API no Render** (M1 + M2, NLP desligado) e **dashboard no Streamlit Community Cloud** | Hugging Face Spaces | O HF passou a cobrar (PRO) por Spaces Docker. No Render (512 MB) o torch não cabe: o NLP fica desligado pelo interruptor e o doador escolhe a categoria; M1 e M2 rodam no processo da API (risco residual: no Compose a inferência é isolada) |
+| D13 | Trilha de **auditoria** no banco (`rede.registro_auditavel`, só inclusão, `sequencia` UNIQUE); a **operacional** segue em arquivo | Tudo em arquivo; as duas trilhas no banco | O disco do Render é apagado a cada deploy: em arquivo, o log de 5 anos sumiria e a cadeia HMAC recomeçaria do zero. A operacional fica em arquivo porque a retenção de 90 dias exige apagar, e a tabela não permite (risco residual: no Render ela é efêmera) |
 
 ## 8. Implantação (CP2/CP3)
 

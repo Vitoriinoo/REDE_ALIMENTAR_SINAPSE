@@ -33,7 +33,7 @@ from src.api.repositorio import LoteNaoEncontrado, RepositorioMemoria, Repositor
 from src.data.curadoria_ipvs import RAIZ
 from src.models.controle import ModeloIA
 from src.observabilidade.freio import Freio
-from src.observabilidade.registro import RegistroAuditavel, Resultado, Trilha, correlacao_atual
+from src.observabilidade.registro import AuditoriaPostgres, RegistroAuditavel, Resultado, Trilha, correlacao_atual
 from src.regras.dominio import Prioridade, TipoDoador
 from src.regras.logistica import MAX_RECUSAS_ANTES_DE_ESCALAR
 from src.regras.questionario import avaliar
@@ -108,9 +108,10 @@ def _chave_declaracao():
 
 
 def iniciar() -> None:
-    E.registro = RegistroAuditavel(DIR_VAR / "log")
-    E.controle, E.info_ia = montar_controle(E.registro, DIR_VAR / "interruptores.json")
     url = os.environ.get("REDE_ALIMENTA_DATABASE_URL")
+    # Com banco, a trilha de auditoria fica no Supabase: o disco do Render é apagado a cada deploy.
+    E.registro = RegistroAuditavel(DIR_VAR / "log", auditoria_db=AuditoriaPostgres(url) if url else None)
+    E.controle, E.info_ia = montar_controle(E.registro, DIR_VAR / "interruptores.json")
     E.repo = RepositorioPostgres(url) if url else RepositorioMemoria(DIR_VAR / "declaracoes")
     E.cadastro = matching.Cadastro(RAIZ / "data" / "processed")
     E.chave_declaracao = _chave_declaracao()

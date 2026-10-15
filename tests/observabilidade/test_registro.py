@@ -110,3 +110,69 @@ def test_minimizar_remove_chaves_proibidas_recursivamente():
 def test_pseudonimo_e_estavel_e_nao_revela_o_id():
     p = pseudonimo("doador", "D-0001")
     assert p == pseudonimo("doador", "D-0001") and "D-0001" not in p and p.startswith("doador:")
+
+
+# --- Trilha de auditoria no banco (Render apaga o disco a cada deploy) --------------------------
+class AuditoriaFalsa:
+    """Mesma interface da AuditoriaPostgres, em memória, guardando o JSON como o JSONB guardaria."""
+
+    def __init__(self):
+        self.linhas: dict[int, str] = {}
+        self.falhar = False
+
+    def ultimo(self):
+        if not self.linhas:
+            return None
+        s = max(self.linhas)
+        return s, json.loads(self.linhas[s])["hash"]
+
+    def gravar(self, sequencia, quando, registro):
+        if self.falhar:
+            raise ConnectionError("banco fora do ar")
+        assert sequencia not in self.linhas  # sequencia é UNIQUE no esquema
+        self.linhas[sequencia] = json.dumps(registro, default=str)
+
+    def ler(self):
+        return [(s, json.loads(self.linhas[s])) for s in sorted(self.linhas)]
+
+
+def _registro_db(tmp_path, db):
+    return RegistroAuditavel(tmp_path, chave=CHAVE, auditoria_db=db,
+                             relogio=lambda: datetime(2026, 10, 5, tzinfo=timezone.utc))
+
+
+def test_auditoria_no_banco_continua_apos_reinicio_sem_arquivo(tmp_path):
+    db = AuditoriaFalsa()
+    _decisao(_registro_db(tmp_path, db), 3)
+    reg2 = _registro_db(tmp_path / "disco-novo", db)  # novo deploy: disco vazio, mesmo banco
+    _decisao(reg2, 2)
+    assert sorted(db.linhas) == [1, 2, 3, 4, 5]
+    assert reg2.verificar_cadeia() == [] and len(reg2.ler(Trilha.AUDITORIA)) == 5
+    assert not list(tmp_path.rglob("auditoria-*.jsonl"))
+
+
+def test_auditoria_no_banco_detecta_alteracao_e_remocao(tmp_path):
+    db = AuditoriaFalsa()
+    reg = _registro_db(tmp_path, db)
+    _decisao(reg, 4)
+    r = json.loads(db.linhas[2])
+    r["resultado"] = "negado"
+    db.linhas[2] = json.dumps(r)
+    del db.linhas[3]
+    problemas = reg.verificar_cadeia()
+    assert any("registro_auditavel:2: conteúdo alterado" in p for p in problemas)
+    assert any("registro_auditavel:4: elo quebrado" in p for p in problemas)
+
+
+def test_falha_no_banco_nao_avanca_a_cadeia(tmp_path):
+    import pytest
+
+    db = AuditoriaFalsa()
+    reg = _registro_db(tmp_path, db)
+    _decisao(reg, 1)
+    db.falhar = True
+    with pytest.raises(ConnectionError):
+        _decisao(reg, 1)
+    db.falhar = False
+    _decisao(reg, 1)
+    assert sorted(db.linhas) == [1, 2] and reg.verificar_cadeia() == []

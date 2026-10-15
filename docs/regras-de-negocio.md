@@ -560,6 +560,8 @@ Os tempos são sorteados a partir de distribuições que dependem de hora, dia, 
 
 **Integridade da trilha de auditoria:** cada registro carrega `hash_anterior` e `hash = HMAC-SHA256(chave, hash_anterior + registro)`. Alterar, apagar ou reordenar qualquer linha **quebra a cadeia** e a verificação aponta onde. Com HMAC (e não SHA-256 simples), quem tem acesso de escrita ao arquivo mas não tem a chave **não consegue recalcular** a cadeia.
 
+**Onde fica (v2.1, SDD D13):** com banco configurado, a trilha de **auditoria** é gravada em `rede.registro_auditavel` (só inclusão: REVOKE + gatilho que barra até o dono), e a cadeia continua do último hash do banco depois de um reinício ou deploy. A trilha **operacional** fica em arquivo, porque a retenção de 90 dias exige apagar.
+
 **Retenção**
 
 | Trilha | Prazo | Justificativa |
