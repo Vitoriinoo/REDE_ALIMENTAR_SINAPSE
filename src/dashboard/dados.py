@@ -125,6 +125,20 @@ def recentes() -> pd.DataFrame:
                                  "ts_cadastro"])
 
 
+PRIORIDADE = {"CRITICA": "🔴 CRÍTICA", "ALTA": "🟠 ALTA", "MEDIA": "🟡 MÉDIA", "BAIXA": "🟢 BAIXA"}
+# Alerta visual (enunciado: vermelho/amarelo para validade crítica): só lote ainda PENDENTE, pela
+# prioridade do Modelo 1, que já carrega a validade (regras 5). Nenhum limite novo de horas.
+ALERTA = {"CRITICA": "critico", "ALTA": "atencao"}
+
+
+def alertas_ao_vivo(r: pd.DataFrame) -> tuple[pd.DataFrame, list[str | None], int, int]:
+    """Tabela rotulada, o nível de alerta de cada linha (None = sem alerta) e as contagens."""
+    pendente = r["status_final"] == "PENDENTE"
+    niveis = [ALERTA.get(p) if pend else None for p, pend in zip(r["prioridade"], pendente)]
+    tabela = r.assign(prioridade=r["prioridade"].map(lambda p: PRIORIDADE.get(p, p)))
+    return tabela, niveis, niveis.count("critico"), niveis.count("atencao")
+
+
 def relatorio(nome: str) -> dict | None:
     caminho = RAIZ / "reports" / nome
     return json.loads(caminho.read_text(encoding="utf-8")) if caminho.exists() else None

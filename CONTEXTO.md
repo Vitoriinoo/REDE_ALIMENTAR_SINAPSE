@@ -73,7 +73,7 @@ Três princípios guiam todas as escolhas:
 | **Impacto Social (30%)** | 352 t de alimento salvo, ~951 mil refeições, descarte de 17,8% (meta < 20%), mapa de calor por vulnerabilidade, ranking que dá 30% do peso à vulnerabilidade do setor, transporte que não exclui ONG sem carro, telas simples para doador e ONG | Aba *Impacto social* do dashboard · [regras §6 e §7](docs/regras-de-negocio.md) · [PRD](docs/prd.md) |
 | **Qualidade da IA (30%)** | Dataset de 24 mil lotes calibrado com fontes abertas (IPVS/SEADE, TACO, PAT, WRAP); split temporal; Modelo 1 (prioridade) com 92,0% de acurácia e 94,3% de recall na classe CRÍTICA; Modelo 2 (descarte) com recall de 87,1% e PR-AUC 0,65 contra 0,28 da heurística; NLP de embeddings do Hugging Face com 80,3% contra 49,7% do zero-shot; piso de segurança; ciclo de feedback com defesa contra envenenamento | Aba *Qualidade da IA* · [reports/metricas_modelos.json](reports/metricas_modelos.json) · [notebook](notebooks/01_eda_e_resultados.ipynb) · [dicionário de dados](docs/dicionario-de-dados.md) |
 | **DevSecOps (20%)** | Pipeline testes → Bandit → build + Trivy → security gate → deploy; 22 achados → 0; Docker endurecido (usuário sem privilégio, sem pip na imagem, read-only); inferência em container isolado sem segredo e sem internet; deploy só com o gate aprovado | Aba *Segurança* · [.github/workflows/ci.yml](.github/workflows/ci.yml) · [reports/sast/](reports/sast) (antes e depois) · [Dockerfile](Dockerfile) · [docker-compose.yml](docker-compose.yml) |
-| **Engenharia & Defesa (20%)** | Código modular em `src/` com regras compartilhadas entre simulação e API, 230 testes, README completo, PRD, SDD com decisões D1–D13, STRIDE com 34 ameaças, governança (LGPD, RIPD, matriz de controles), pitch com roteiro | [README](README.md) · [SDD](docs/sdd.md) · [STRIDE](docs/stride/matriz-stride.md) · [governança](docs/governanca) |
+| **Engenharia & Defesa (20%)** | Código modular em `src/` com regras compartilhadas entre simulação e API, 232 testes, README completo, PRD, SDD com decisões D1–D13, STRIDE com 34 ameaças, governança (LGPD, RIPD, matriz de controles), pitch com roteiro | [README](README.md) · [SDD](docs/sdd.md) · [STRIDE](docs/stride/matriz-stride.md) · [governança](docs/governanca) |
 
 ### 3.2 Entregáveis → arquivo → situação
 
@@ -99,7 +99,7 @@ Três princípios guiam todas as escolhas:
 | Tempo médio de match | aba *Impacto social* (por prioridade: CRÍTICA é ofertada primeiro) |
 | Vulnerabilidades mitigadas (SAST) e security gates | aba *Segurança* (antes × depois, status do gate) |
 | Gráficos dinâmicos / pulsação da rede | aba *Ao vivo* (lotes cadastrados pela API) |
-| Alertas de validade crítica | hoje só na tela *Ofertas da ONG* (🔴 CRÍTICA, 🟠 ALTA, 🟡 MÉDIA). **Lacuna:** a aba *Ao vivo* mostra uma tabela sem destaque (ver §8) |
+| Alertas de validade crítica | aba *Ao vivo*: linha vermelha para CRÍTICA pendente e amarela para ALTA pendente, com faixa de alerta e contador (pela prioridade do M1, sem limite novo de horas); também na tela *Ofertas da ONG* |
 | Operação real | páginas *Doar alimentos*, *Ofertas da ONG* e *Administração*, liberadas pela chave de acesso de cada papel |
 
 ## 4. Decisões que não se reinterpretam
@@ -151,8 +151,8 @@ Estas regras foram decididas pelo grupo ou cobradas pelo professor. Não transfo
 
 - [ ] Criar o projeto no Supabase e carregar o banco (`python -m src.db.carregar` e `python deploy/configurar_banco.py`)
 - [ ] Publicar a API no Render e o dashboard no Streamlit Cloud (passo a passo no README, seção *Deploy*); secret `RENDER_DEPLOY_HOOK` no GitHub
-- [ ] **Alertas visuais na aba *Ao vivo*** (o enunciado pede vermelho/amarelo para validade crítica): destacar CRÍTICA/ALTA e as horas restantes de validade em `src/dashboard/paginas/painel.py`
+- [x] **Alertas visuais na aba *Ao vivo*** (o enunciado pede vermelho/amarelo para validade crítica): CRÍTICA/ALTA pendentes destacadas pela prioridade do M1 em `src/dashboard/paginas/painel.py` (decisão: sem limite novo de horas)
 - [ ] Trocar as URLs provisórias do README e do slide da demo pelas reais
-- [x] Atualizar a contagem de testes no README (230 = 224 locais + 6 no CI)
+- [x] Atualizar a contagem de testes no README (232 = 226 locais + 6 no CI)
 - [ ] Nomes do grupo na capa do pitch
 - [ ] No dia: abrir a API 1–2 min antes (o Render grátis "dorme" após 15 min sem acesso) e ter um lote de exemplo pronto para cadastrar ao vivo

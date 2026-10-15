@@ -10,6 +10,7 @@ from datetime import datetime, timedelta, timezone
 import streamlit as st
 
 from src.dashboard.cliente_api import ErroAPI, chamar
+from src.dashboard.dados import PRIORIDADE
 
 BRASILIA = timezone(timedelta(hours=-3))
 ident, chave = st.session_state.get("ident") or {}, st.session_state.get("chave")
@@ -17,7 +18,6 @@ if ident.get("papel") != "ong":
     st.warning("Entre com uma chave de ONG na barra lateral.")
     st.stop()
 
-PRIORIDADE = {"CRITICA": "🔴 CRÍTICA", "ALTA": "🟠 ALTA", "MEDIA": "🟡 MÉDIA", "BAIXA": "🟢 BAIXA"}
 CATEGORIA = {"preparado": "Preparado", "refrigerado": "Refrigerado", "congelado": "Congelado",
              "hortifruti": "Hortifrúti", "padaria": "Padaria", "nao_perecivel": "Não perecível"}
 

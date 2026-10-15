@@ -253,11 +253,23 @@ with aba_vivo:
             st.info("Nenhum lote ao vivo ainda. Cadastre um pelo Swagger da API: "
                     f"{dados.API_PUBLICA}/docs")
         else:
-            c = st.columns(3)
+            tabela, niveis, n_critica, n_alta = dados.alertas_ao_vivo(r)
+            c = st.columns(4)
             c[0].metric("Lotes ao vivo", len(r))
             c[1].metric("kg cadastrados", br(r["peso_kg"].sum(), 1))
             c[2].metric("Entregues", int((r["status_final"] == "ENTREGUE").sum()))
-            st.dataframe(r, hide_index=True, use_container_width=True)
+            c[3].metric("Alertas pendentes", n_critica + n_alta)
+            if n_critica:
+                st.error(f"{n_critica} lote(s) CRÍTICO(S) pendente(s): validade curta, ofertados primeiro às ONGs.",
+                         icon="🔴")
+            if n_alta:
+                st.warning(f"{n_alta} lote(s) de prioridade ALTA pendente(s).", icon="🟡")
+            fundo = {"critico": "background-color: #f8d4d4; color: #5c1010",
+                     "atencao": "background-color: #fdedc4; color: #4d3500"}
+            estilo = tabela.style.apply(lambda _: [fundo.get(niveis[i], "") for i in range(len(tabela))], axis=0)
+            st.dataframe(estilo, hide_index=True, use_container_width=True)
+            st.caption("🔴 vermelho: CRÍTICA pendente · 🟡 amarelo: ALTA pendente · a prioridade vem do Modelo 1 "
+                       "com piso de segurança, que já considera a validade calculada pelo sistema.")
 
     ao_vivo()
 
