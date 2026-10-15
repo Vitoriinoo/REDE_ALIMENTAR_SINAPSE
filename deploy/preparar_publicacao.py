@@ -7,7 +7,7 @@ O dashboard recebe SÓ a conexão de leitura (papel rede_dashboard); nenhuma cha
 Nada é impresso na tela; a pasta segredos/ não vai para o Git.
 
 Uso:
-    .venv\\Scripts\\python deploy\\preparar_publicacao.py https://rede-alimenta-api.onrender.com
+    .venv\\Scripts\\python deploy\\preparar_publicacao.py https://rede-alimenta-ia-api-d5dk.onrender.com
 """
 
 from __future__ import annotations
@@ -22,7 +22,7 @@ API = ["REDE_ALIMENTA_AMBIENTE", "REDE_ALIMENTA_CHAVE_HMAC", "REDE_ALIMENTA_CHAV
 
 
 def main() -> None:
-    url_api = sys.argv[1].rstrip("/") if len(sys.argv) > 1 else "https://rede-alimenta-api.onrender.com"
+    url_api = sys.argv[1].rstrip("/") if len(sys.argv) > 1 else "https://rede-alimenta-ia-api-d5dk.onrender.com"
     env = {}
     for linha in (RAIZ / ".env").read_text(encoding="utf-8").splitlines():
         if "=" in linha and not linha.lstrip().startswith("#"):

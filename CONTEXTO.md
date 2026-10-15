@@ -85,8 +85,8 @@ Três princípios guiam todas as escolhas:
 | Dockerfile + Compose | `Dockerfile` (alvos `api`, `inferencia`, `dashboard`, `render`) e `docker-compose.yml` | Pronto |
 | Pipeline CI/CD | `.github/workflows/ci.yml` | Pronto |
 | Relatórios SAST (Bandit e Trivy) | `reports/sast/` (arquivos `-antes` e atuais + `resumo.json`) | Pronto: 22 → 0 |
-| URL pública | API no **Render** (alvo `render`) e dashboard no **Streamlit Community Cloud** | Código pronto; falta publicar e colocar as URLs reais no README |
-| Banco em nuvem | **Supabase** com `db/schema.sql` (NUMERIC, UUID, RLS, papéis de menor privilégio, tabela só de inclusão) | Código pronto; falta carregar no projeto Supabase |
+| URL pública | API no **Render** (alvo `render`) e dashboard no **Streamlit Community Cloud** | Publicado: [API](https://rede-alimenta-ia-api-d5dk.onrender.com/docs) e [dashboard](https://rede-alimenta-ia.streamlit.app/) |
+| Banco em nuvem | **Supabase** com `db/schema.sql` (NUMERIC, UUID, RLS, papéis de menor privilégio, tabela só de inclusão) | Carregado (ano simulado + 234.517 eventos); auditoria da API gravada no banco |
 | README completo | `README.md` | Pronto; atualizar URLs e a contagem de testes |
 | Pitch final | Deck de 12 slides com notas de fala | Pronto; faltam nomes do grupo na capa e URLs no slide da demo |
 
@@ -149,10 +149,10 @@ Estas regras foram decididas pelo grupo ou cobradas pelo professor. Não transfo
 
 ## 8. O que falta para a apresentação
 
-- [ ] Criar o projeto no Supabase e carregar o banco (`python -m src.db.carregar` e `python deploy/configurar_banco.py`)
-- [ ] Publicar a API no Render e o dashboard no Streamlit Cloud (passo a passo no README, seção *Deploy*); secret `RENDER_DEPLOY_HOOK` no GitHub
+- [x] Criar o projeto no Supabase e carregar o banco (`python -m src.db.carregar` e `python deploy/configurar_banco.py`)
+- [x] Publicar a API no Render e o dashboard no Streamlit Cloud (passo a passo no README, seção *Deploy*); secret `RENDER_DEPLOY_HOOK` no GitHub
 - [x] **Alertas visuais na aba *Ao vivo*** (o enunciado pede vermelho/amarelo para validade crítica): CRÍTICA/ALTA pendentes destacadas pela prioridade do M1 em `src/dashboard/paginas/painel.py` (decisão: sem limite novo de horas)
-- [ ] Trocar as URLs provisórias do README e do slide da demo pelas reais
+- [ ] Trocar as URLs provisórias do slide da demo pelas reais (README já atualizado)
 - [x] Atualizar a contagem de testes no README (232 = 226 locais + 6 no CI)
 - [ ] Nomes do grupo na capa do pitch
 - [ ] No dia: abrir a API 1–2 min antes (o Render grátis "dorme" após 15 min sem acesso) e ter um lote de exemplo pronto para cadastrar ao vivo

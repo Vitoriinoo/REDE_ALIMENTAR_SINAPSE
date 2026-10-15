@@ -6,8 +6,8 @@ Plataforma com **IA e DevSecOps** que conecta, em tempo real, doadores de alimen
 
 | | Link |
 |---|---|
-| **API pública (Swagger)** | `https://rede-alimenta-api.onrender.com/docs` (Render) |
-| **Dashboard público** | `https://<app>.streamlit.app` (Streamlit Community Cloud) |
+| **API pública (Swagger)** | [rede-alimenta-ia-api-d5dk.onrender.com/docs](https://rede-alimenta-ia-api-d5dk.onrender.com/docs) (Render) |
+| **Dashboard público** | [rede-alimenta-ia.streamlit.app](https://rede-alimenta-ia.streamlit.app/) (Streamlit Community Cloud) |
 | **Pipeline CI/CD** | aba *Actions* deste repositório (testes → Bandit → Trivy → security gate → deploy) |
 
 ---
